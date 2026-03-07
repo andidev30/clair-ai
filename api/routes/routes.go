@@ -13,6 +13,9 @@ func Setup(app *fiber.App) {
 	auth := api.Group("/auth")
 	auth.Post("/google", handlers.GoogleLogin)
 
+	// Public session join (candidate access via token, no auth)
+	api.Get("/sessions/:token/join", handlers.JoinSession)
+
 	// Protected routes
 	protected := api.Group("", middleware.JWTProtected())
 
@@ -29,4 +32,16 @@ func Setup(app *fiber.App) {
 	interviews.Get("/:id", handlers.GetInterview)
 	interviews.Put("/:id", handlers.UpdateInterview)
 	interviews.Delete("/:id", handlers.DeleteInterview)
+
+	// Sessions (nested under interviews)
+	interviews.Post("/:id/sessions", handlers.CreateSession)
+	interviews.Get("/:id/sessions", handlers.ListSessions)
+
+	// Session details & results
+	protected.Get("/sessions/:id", handlers.GetSession)
+	protected.Get("/sessions/:id/result", handlers.GetResult)
+
+	// Internal webhook (API key auth)
+	internal := app.Group("/internal", middleware.APIKeyProtected())
+	internal.Post("/sessions/:sessionId/result", handlers.ReceiveResult)
 }

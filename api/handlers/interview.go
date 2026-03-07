@@ -61,15 +61,22 @@ func CreateInterview(c *fiber.Ctx) error {
 	}
 
 	now := time.Now()
+	techStack := input.TechStack
+	if techStack == nil {
+		techStack = []string{}
+	}
+
 	interview := models.Interview{
-		ID:            uuid.New().String(),
-		UserID:        userID,
-		Title:         input.Title,
-		CandidateName: input.CandidateName,
-		Position:      input.Position,
-		Level:         input.Level,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+		ID:             uuid.New().String(),
+		UserID:         userID,
+		Title:          input.Title,
+		CandidateName:  input.CandidateName,
+		Position:       input.Position,
+		Level:          input.Level,
+		TechStack:      techStack,
+		JobDescription: input.JobDescription,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
 
 	col := database.DB.Collection("interviews")
@@ -110,6 +117,12 @@ func UpdateInterview(c *fiber.Ctx) error {
 	}
 	if input.Level != nil {
 		update["level"] = *input.Level
+	}
+	if input.TechStack != nil {
+		update["tech_stack"] = input.TechStack
+	}
+	if input.JobDescription != nil {
+		update["job_description"] = *input.JobDescription
 	}
 
 	_, err := col.UpdateOne(context.Background(), bson.M{"_id": id}, bson.M{"$set": update})

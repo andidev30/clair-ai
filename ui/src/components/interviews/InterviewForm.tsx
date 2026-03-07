@@ -30,6 +30,8 @@ export default function InterviewForm({
   const [candidateName, setCandidateName] = useState('');
   const [position, setPosition] = useState('');
   const [level, setLevel] = useState<string>('junior');
+  const [techStack, setTechStack] = useState('');
+  const [jobDescription, setJobDescription] = useState('');
 
   useEffect(() => {
     if (interview) {
@@ -37,11 +39,15 @@ export default function InterviewForm({
       setCandidateName(interview.candidate_name);
       setPosition(interview.position);
       setLevel(interview.level);
+      setTechStack(interview.tech_stack?.join(', ') ?? '');
+      setJobDescription(interview.job_description ?? '');
     } else {
       setTitle('');
       setCandidateName('');
       setPosition('');
       setLevel('junior');
+      setTechStack('');
+      setJobDescription('');
     }
   }, [interview, open]);
 
@@ -51,6 +57,11 @@ export default function InterviewForm({
       candidate_name: candidateName,
       position,
       level: level as CreateInterviewInput['level'],
+      tech_stack: techStack
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      job_description: jobDescription,
     });
   };
 
@@ -101,6 +112,27 @@ export default function InterviewForm({
               <MenuItem value={InterviewLevel.MIDDLE}>Middle</MenuItem>
               <MenuItem value={InterviewLevel.SENIOR}>Senior</MenuItem>
             </TextField>
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <TextField
+              label="Tech Stack"
+              value={techStack}
+              onChange={(e) => setTechStack(e.target.value)}
+              fullWidth
+              placeholder="React, Node.js, PostgreSQL"
+              helperText="Comma-separated list of technologies"
+            />
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <TextField
+              label="Job Description"
+              value={jobDescription}
+              onChange={(e) => setJobDescription(e.target.value)}
+              fullWidth
+              multiline
+              rows={3}
+              placeholder="Describe the role and expectations..."
+            />
           </Grid>
         </Grid>
       </DialogContent>

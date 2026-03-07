@@ -1,8 +1,10 @@
-import { Box, Card, CardContent, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Button, Card, CardContent, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PersonIcon from '@mui/icons-material/Person';
 import WorkIcon from '@mui/icons-material/Work';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import { useNavigate } from 'react-router';
 import type { Interview, InterviewLevelType } from '../../types';
 
 const levelConfig: Record<InterviewLevelType, { label: string; color: 'success' | 'warning' | 'error' }> = {
@@ -18,6 +20,7 @@ interface InterviewCardProps {
 }
 
 export default function InterviewCard({ interview, onEdit, onDelete }: InterviewCardProps) {
+  const navigate = useNavigate();
   const level = levelConfig[interview.level] ?? { label: interview.level, color: 'default' as const };
 
   return (
@@ -42,17 +45,26 @@ export default function InterviewCard({ interview, onEdit, onDelete }: Interview
         </Stack>
       </CardContent>
 
-      <Box display="flex" justifyContent="flex-end" px={1} pb={1}>
-        <Tooltip title="Edit">
-          <IconButton size="small" onClick={() => onEdit(interview)}>
-            <EditIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Delete">
-          <IconButton size="small" onClick={() => onDelete(interview)} color="error">
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
+      <Box display="flex" justifyContent="space-between" alignItems="center" px={1} pb={1}>
+        <Button
+          size="small"
+          startIcon={<VisibilityIcon />}
+          onClick={() => navigate(`/interviews/${interview.id}`)}
+        >
+          Details
+        </Button>
+        <Box>
+          <Tooltip title="Edit">
+            <IconButton size="small" onClick={() => onEdit(interview)}>
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Delete">
+            <IconButton size="small" onClick={() => onDelete(interview)} color="error">
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </Box>
     </Card>
   );

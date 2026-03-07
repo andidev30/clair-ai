@@ -12,6 +12,8 @@ type Config struct {
 	JWTSecret      string
 	MongoURI       string
 	Port           string
+	InternalAPIKey string
+	AllowedOrigins string
 }
 
 var AppConfig Config
@@ -26,6 +28,8 @@ func Load() {
 		JWTSecret:      getEnv("JWT_SECRET", "clair-ai-dev-secret"),
 		MongoURI:       getEnv("MONGO_URI", "mongodb://localhost:27017/clair_ai"),
 		Port:           getEnv("PORT", "3000"),
+		InternalAPIKey: getEnv("INTERNAL_API_KEY", "clair-ai-dev-key"),
+		AllowedOrigins: getEnv("ALLOWED_ORIGINS", "*"),
 	}
 }
 
