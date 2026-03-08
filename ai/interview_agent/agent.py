@@ -9,6 +9,7 @@ from interview_agent.tools import (
     send_coding_challenge_tool,
     observe_screen_tool,
     end_interview_tool,
+    get_cheating_signals_tool,
 )
 
 MODEL = os.getenv("AGENT_MODEL", "gemini-2.5-flash-preview-native-audio-dialog")
@@ -51,5 +52,6 @@ Note: You DO NOT have the candidate's resume. Do not claim to have read their re
             send_coding_challenge_tool,
             observe_screen_tool,
             end_interview_tool,
+            get_cheating_signals_tool,
         ],
     )

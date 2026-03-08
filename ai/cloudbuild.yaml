@@ -1,0 +1,42 @@
+steps:
+  # Build AI image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/clair-ai', '.']
+  # Push AI image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/clair-ai']
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        if [ -f .env.production ]; then
+          echo "Converting .env.production to env.yaml format..."
+          awk -F '=' '!/^#/ && /./ {
+            key = $$1;
+            sub(/^[^=]*=/, "", $$0);
+            val = $$0;
+            gsub(/^["\047]|["\047]$$/, "", val);
+            gsub(/"/, "\\\"", val); # escape any internal double quotes
+            printf "%s: \"%s\"\n", key, val;
+          }' .env.production > env.yaml
+          
+          gcloud run deploy clair-ai \
+            --image=gcr.io/$$PROJECT_ID/clair-ai \
+            --region=us-central1 \
+            --platform=managed \
+            --allow-unauthenticated \
+            --memory=1Gi \
+            --timeout=3600 \
+            --env-vars-file=env.yaml
+        else
+          echo "Warning: .env.production not found. Deploying without custom env vars."
+          gcloud run deploy clair-ai \
+            --image=gcr.io/$$PROJECT_ID/clair-ai \
+            --region=us-central1 \
+            --platform=managed \
+            --allow-unauthenticated \
+            --memory=1Gi \
+            --timeout=3600
+        fi

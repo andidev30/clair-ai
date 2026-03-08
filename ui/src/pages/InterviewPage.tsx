@@ -25,6 +25,7 @@ import {
   useWebSocket,
   type CodingChallenge,
   type TranscriptMessage,
+  type CheatingSignal,
 } from '../hooks/useWebSocket';
 import { useAudioStream } from '../hooks/useAudioStream';
 import { useScreenCapture } from '../hooks/useScreenCapture';
@@ -155,6 +156,7 @@ export default function InterviewPage() {
     sendAudio,
     sendScreenFrame,
     endInterview,
+    sendCheatingSignal,
     connected,
     error,
   } = useWebSocket({
@@ -193,6 +195,22 @@ export default function InterviewPage() {
   // Keep refs in sync
   stopMicRef.current = stopMic;
   stopScreenRef.current = stopScreen;
+
+  // Tab-switch detection — only active after interview starts
+  useEffect(() => {
+    if (!started) return;
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        sendCheatingSignal({
+          signal_type: 'tab_switch',
+          detail: 'Candidate switched away from the interview tab',
+          timestamp: Date.now(),
+        } satisfies CheatingSignal);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [started, sendCheatingSignal]);
 
   const handleStart = async () => {
     // Create AudioContext on user gesture so browser allows playback
@@ -368,6 +386,11 @@ export default function InterviewPage() {
                 starterCode={challenge?.starter_code ?? ''}
                 value={code}
                 onChange={setCode}
+                onLargePaste={(lineCount) => sendCheatingSignal({
+                  signal_type: 'large_paste',
+                  detail: `Pasted ${lineCount} lines of code at once`,
+                  timestamp: Date.now(),
+                })}
               />
             </Box>
           </>

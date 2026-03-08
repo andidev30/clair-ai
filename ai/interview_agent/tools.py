@@ -146,6 +146,28 @@ def end_interview(
     return {"status": "interview_ended", "message": "Interview evaluation submitted."}
 
 
+def get_cheating_signals() -> dict:
+    """Get all cheating signals detected during the interview.
+
+    Returns suspicious behaviors: AI tool usage on screen, large code pastes,
+    tab switches. Call this before end_interview to factor integrity signals
+    into your evaluation.
+
+    Returns:
+        A dict with 'signals' list and 'summary' string.
+    """
+    state = get_session_state()
+    signals = state.get("cheating_signals", [])
+    if not signals:
+        return {"signals": [], "summary": "No suspicious behavior detected."}
+    lines = [f"- [{s['signal_type']}] {s['detail']}" for s in signals]
+    return {
+        "signals": signals,
+        "summary": f"{len(signals)} suspicious event(s) detected:\n" + "\n".join(lines),
+    }
+
+
 send_coding_challenge_tool = FunctionTool(send_coding_challenge)
 observe_screen_tool = FunctionTool(observe_screen)
 end_interview_tool = FunctionTool(end_interview)
+get_cheating_signals_tool = FunctionTool(get_cheating_signals)

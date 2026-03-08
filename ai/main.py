@@ -184,6 +184,16 @@ async def interview_ws(websocket: WebSocket, session_token: str):
                                 "Screen frame received - candidate's code editor is visible"
                             )
 
+                        elif msg_type == "cheating_signal":
+                            # Behavioral cheating signal from frontend — store silently, do NOT inject into live queue
+                            state = get_session_state_by_token(session_token)
+                            state.setdefault("cheating_signals", []).append({
+                                "signal_type": msg.get("signal_type"),
+                                "detail": msg.get("detail", ""),
+                                "timestamp": msg.get("timestamp", 0),
+                            })
+                            logger.info(f"Cheating signal: {msg.get('signal_type')} - {msg.get('detail', '')[:60]}")
+
                         elif msg_type == "end_interview":
                             # Candidate manually ended the interview
                             content = types.Content(
@@ -325,6 +335,15 @@ async def interview_ws(websocket: WebSocket, session_token: str):
                     if state.get("interview_ended"):
                         transcript = state.get("transcript", [])
                         scores = state.get("scores", {})
+                        cheating_signals = state.get("cheating_signals", [])
+                        key_moments = [
+                            {
+                                "timestamp": float(s.get("timestamp", 0)) / 1000,
+                                "type": s["signal_type"],
+                                "description": s["detail"],
+                            }
+                            for s in cheating_signals
+                        ]
                         result_data = {
                             "overall_score": scores.get("overall_score", 0),
                             "recommendation": scores.get("recommendation", "no_hire"),
@@ -340,7 +359,7 @@ async def interview_ws(websocket: WebSocket, session_token: str):
                                 "coding_skills": 0,
                                 "system_design": 0,
                             }),
-                            "key_moments": [],
+                            "key_moments": key_moments,
                         }
                         await post_result(session_id, result_data)
                         await websocket.send_text(json.dumps({

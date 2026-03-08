@@ -6,6 +6,12 @@ export interface TranscriptMessage {
   finished: boolean;
 }
 
+export interface CheatingSignal {
+  signal_type: 'ai_tool_detected' | 'large_paste' | 'tab_switch' | 'fast_typing';
+  detail: string;
+  timestamp: number;
+}
+
 export interface CodingChallenge {
   problem: string;
   language: string;
@@ -155,6 +161,12 @@ export function useWebSocket({
     }
   }, []);
 
+  const sendCheatingSignal = useCallback((signal: CheatingSignal) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'cheating_signal', ...signal }));
+    }
+  }, []);
+
   const disconnect = useCallback(() => {
     wsRef.current?.close();
     wsRef.current = null;
@@ -174,6 +186,7 @@ export function useWebSocket({
     sendText,
     sendScreenFrame,
     endInterview,
+    sendCheatingSignal,
     connected,
     error,
   };

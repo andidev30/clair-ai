@@ -124,7 +124,15 @@ export default function ResultsPage() {
                 <ListItemText
                   primary={
                     <Box display="flex" alignItems="center" gap={1}>
-                      <Chip label={moment.type} size="small" />
+                      <Chip
+                        label={moment.type.replace(/_/g, ' ')}
+                        size="small"
+                        color={
+                          moment.type === 'ai_tool_detected' ? 'error' :
+                          moment.type === 'large_paste' || moment.type === 'tab_switch' ? 'warning' :
+                          'default'
+                        }
+                      />
                       <Typography variant="body2">{moment.description}</Typography>
                     </Box>
                   }

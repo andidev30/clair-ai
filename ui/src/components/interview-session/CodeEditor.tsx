@@ -1,5 +1,5 @@
 import { Box, Typography } from '@mui/material';
-import Editor from '@monaco-editor/react';
+import Editor, { type OnMount } from '@monaco-editor/react';
 
 interface CodeEditorProps {
   problem: string;
@@ -7,6 +7,7 @@ interface CodeEditorProps {
   starterCode: string;
   value: string;
   onChange: (value: string) => void;
+  onLargePaste?: (lineCount: number) => void;
 }
 
 export default function CodeEditor({
@@ -15,7 +16,14 @@ export default function CodeEditor({
   starterCode,
   value,
   onChange,
+  onLargePaste,
 }: CodeEditorProps) {
+  const handleMount: OnMount = (editor) => {
+    editor.onDidPaste((e) => {
+      const lines = e.range.endLineNumber - e.range.startLineNumber;
+      if (lines >= 5) onLargePaste?.(lines);
+    });
+  };
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {problem && (
@@ -42,6 +50,7 @@ export default function CodeEditor({
           language={language || 'javascript'}
           value={value || starterCode}
           onChange={(v) => onChange(v ?? '')}
+          onMount={handleMount}
           theme="vs-dark"
           options={{
             minimap: { enabled: false },
