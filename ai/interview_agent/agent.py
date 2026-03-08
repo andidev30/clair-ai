@@ -36,8 +36,10 @@ def create_interview_agent(interview_config: dict | None = None) -> Agent:
 - Candidate: {interview_config.get('candidate_name', 'the candidate')}
 - Position: {interview_config.get('position', 'Software Engineer')}
 - Level: {interview_config.get('level', 'junior')}
-- Tech Stack: {', '.join(interview_config.get('tech_stack', [])) or 'General'}
+- Job Requirements (Tech Stack): {', '.join(interview_config.get('tech_stack', [])) or 'General'}
 {'- Job Description: ' + job_desc if job_desc else ''}
+
+Note: You DO NOT have the candidate's resume. Do not claim to have read their resume. Use the Job Requirements to guide your questions about their experience.
 """
 
     return Agent(

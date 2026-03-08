@@ -224,6 +224,16 @@ async def interview_ws(websocket: WebSocket, session_token: str):
         def _close_gate(timeout: float = 5.0):
             nonlocal gate_timeout_task
             audio_gate.clear()
+            
+            # Drain the queue to drop any pending in-flight audio frames.
+            # If we don't drop them, the runner will send them while the API
+            # is trying to handle a tool call, which causes a 1008 policy violation.
+            while not live_request_queue._queue.empty():
+                try:
+                    live_request_queue._queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+
             if gate_timeout_task and not gate_timeout_task.done():
                 gate_timeout_task.cancel()
             gate_timeout_task = asyncio.create_task(_gate_with_timeout(timeout))
