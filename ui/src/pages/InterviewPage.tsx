@@ -83,41 +83,53 @@ export default function InterviewPage() {
   }, [ensureAudioContext]);
 
   const handleTranscript = useCallback((msg: TranscriptMessage) => {
+    console.log('[Transcript IN]', msg.speaker, msg.finished ? 'FINAL' : 'partial', `"${msg.text.substring(0, 80)}..."`);
+
     setMessages((prev) => {
-      // Find the last message from the SAME speaker (may not be the very last message)
-      let lastIdx = -1;
-      for (let i = prev.length - 1; i >= 0; i--) {
+      // Search backwards for the most recent message from the SAME speaker
+      let sameIdx = -1;
+      for (let i = prev.length - 1; i >= Math.max(0, prev.length - 8); i--) {
         if (prev[i].speaker === msg.speaker) {
-          lastIdx = i;
+          sameIdx = i;
           break;
         }
       }
-      const last = lastIdx >= 0 ? prev[lastIdx] : null;
 
-      if (last) {
-        // If same speaker's last message is still streaming, update in-place
-        if (!last.finished) {
-          const newText = msg.text.startsWith(last.text)
-            ? msg.text
-            : last.text + ' ' + msg.text;
+      // Found an existing message from the same speaker
+      if (sameIdx >= 0) {
+        const existing = prev[sameIdx];
+
+        // Still streaming (unfinished) → update in place
+        if (!existing.finished) {
           const updated = [...prev];
-          updated[lastIdx] = { ...last, text: newText, finished: msg.finished };
+          if (msg.finished) {
+            // FINAL has full cumulative text → replace for accuracy
+            console.log('[Transcript] FINAL replace', msg.speaker, `"${msg.text.substring(0, 60)}..."`);
+            updated[sameIdx] = { ...existing, text: msg.text, finished: true };
+          } else {
+            // Partial has just the new word(s) → concatenate
+            console.log('[Transcript] APPEND partial', msg.speaker, `"${msg.text.substring(0, 60)}..."`);
+            updated[sameIdx] = { ...existing, text: existing.text + msg.text, finished: false };
+          }
           return updated;
         }
 
-        // If same speaker's last message is already finished and the new text
-        // is the same (or very similar), this is a duplicate final — skip it
+        // Already finished → check for duplicate/replay
+        const existTrimmed = existing.text.trim();
+        const newTrimmed = msg.text.trim();
         if (
-          msg.finished &&
-          (last.text === msg.text ||
-            last.text.includes(msg.text.substring(0, Math.min(30, msg.text.length))) ||
-            msg.text.includes(last.text.substring(0, Math.min(30, last.text.length))))
+          existTrimmed === newTrimmed ||
+          (existTrimmed.length > 15 && newTrimmed.startsWith(existTrimmed.substring(0, 30))) ||
+          (newTrimmed.length > 15 && existTrimmed.startsWith(newTrimmed.substring(0, 30)))
         ) {
-          return prev; // skip duplicate
+          console.log('[Transcript] SKIP duplicate', msg.speaker);
+          return prev;
         }
       }
 
-      return [...prev, { ...msg }];
+      // No matching speaker found, or genuinely new utterance → append
+      console.log('[Transcript] ADD new', msg.speaker, `"${msg.text.substring(0, 60)}..."`);
+      return [...prev, { speaker: msg.speaker, text: msg.text, finished: msg.finished }];
     });
   }, []);
 
@@ -138,6 +150,9 @@ export default function InterviewPage() {
     }
   }, []);
 
+  const stopMicRef = useRef<() => void>(() => { });
+  const stopScreenRef = useRef<() => void>(() => { });
+
   const {
     connect,
     sendAudio,
@@ -151,7 +166,11 @@ export default function InterviewPage() {
     onTranscript: handleTranscript,
     onCodingChallenge: handleCodingChallenge,
     onStageChange: handleStageChange,
-    onInterviewComplete: () => setComplete(true),
+    onInterviewComplete: () => {
+      setComplete(true);
+      stopMicRef.current();
+      stopScreenRef.current();
+    },
   });
 
   const { start: startMic, stop: stopMic, isRecording, getVolume } = useAudioStream({
@@ -161,6 +180,10 @@ export default function InterviewPage() {
   const { start: startScreen, stop: stopScreen, isSharing } = useScreenCapture({
     onFrame: sendScreenFrame,
   });
+
+  // Keep refs in sync
+  stopMicRef.current = stopMic;
+  stopScreenRef.current = stopScreen;
 
   const handleStart = async () => {
     // Create AudioContext on user gesture so browser allows playback

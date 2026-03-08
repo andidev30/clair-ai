@@ -36,37 +36,19 @@ def get_session_state() -> dict:
     return _session_states.get(_active_token, {})
 
 
-def change_stage(stage: str, action: str = "") -> dict:
-    """Signal the UI to transition to a new interview stage.
-
-    Call this tool when you want the UI to change. For example, call with
-    stage='coding' and action='show_editor' to show the code editor, or
-    stage='wrapup' and action='hide_editor' to hide it.
-
-    Args:
-        stage: The stage to transition to. One of 'warmup', 'coding', 'wrapup'.
-        action: Optional UI action to trigger. One of:
-            - 'show_editor': Show the code editor panel
-            - 'hide_editor': Hide the code editor panel
-            - 'request_screen_share': Prompt user to share their screen
-
-    Returns:
-        Confirmation that the stage change was sent to the UI.
-    """
+def _send_to_client(msg_dict: dict):
+    """Helper to send a JSON message to the client websocket."""
     ws = get_session_state().get("websocket")
     if ws:
         import asyncio
-        msg = json.dumps({
-            "type": "stage_change",
-            "stage": stage,
-            "action": action,
-        })
-        asyncio.create_task(ws.send_text(msg))
-    return {"status": "stage_changed", "stage": stage, "action": action}
+        asyncio.create_task(ws.send_text(json.dumps(msg_dict)))
 
 
 def send_coding_challenge(problem: str, language: str = "javascript", starter_code: str = "") -> dict:
     """Send a coding challenge to the candidate's editor.
+
+    This will automatically show the code editor and prompt the candidate
+    to share their screen.
 
     Args:
         problem: The coding problem description to display to the candidate.
@@ -76,16 +58,26 @@ def send_coding_challenge(problem: str, language: str = "javascript", starter_co
     Returns:
         A confirmation that the challenge was sent.
     """
-    ws = get_session_state().get("websocket")
-    if ws:
-        import asyncio
-        msg = json.dumps({
-            "type": "coding_challenge",
-            "problem": problem,
-            "language": language,
-            "starter_code": starter_code,
-        })
-        asyncio.create_task(ws.send_text(msg))
+    state = get_session_state()
+    state["current_stage"] = "coding"
+
+    # Automatically handle UI transitions
+    _send_to_client({
+        "type": "stage_change",
+        "stage": "coding",
+        "action": "request_screen_share",
+    })
+    _send_to_client({
+        "type": "stage_change",
+        "stage": "coding",
+        "action": "show_editor",
+    })
+    _send_to_client({
+        "type": "coding_challenge",
+        "problem": problem,
+        "language": language,
+        "starter_code": starter_code,
+    })
     return {"status": "sent", "problem": problem, "language": language}
 
 
@@ -113,6 +105,8 @@ def end_interview(
 ) -> dict:
     """Signal that the interview is complete and submit the final evaluation scores.
 
+    This will automatically hide the code editor and transition to the wrap-up stage.
+
     Args:
         overall_score: The overall interview score from 0 to 100.
         recommendation: One of 'strong_hire', 'hire', 'no_hire', 'strong_no_hire'.
@@ -127,6 +121,7 @@ def end_interview(
         Confirmation that the interview ending process has started.
     """
     state = get_session_state()
+    state["current_stage"] = "wrapup"
     state["interview_ended"] = True
     state["scores"] = {
         "overall_score": overall_score,
@@ -140,10 +135,17 @@ def end_interview(
             "system_design": system_design,
         },
     }
+
+    # Automatically hide editor on wrap-up
+    _send_to_client({
+        "type": "stage_change",
+        "stage": "wrapup",
+        "action": "hide_editor",
+    })
+
     return {"status": "interview_ended", "message": "Interview evaluation submitted."}
 
 
-change_stage_tool = FunctionTool(change_stage)
 send_coding_challenge_tool = FunctionTool(send_coding_challenge)
 observe_screen_tool = FunctionTool(observe_screen)
 end_interview_tool = FunctionTool(end_interview)

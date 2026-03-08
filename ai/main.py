@@ -102,11 +102,13 @@ async def interview_ws(websocket: WebSocket, session_token: str):
 
     live_request_queue = LiveRequestQueue()
 
-    # Gate to pause audio streaming during agent transitions.
-    # When cleared, upstream_task will drop audio frames to avoid
-    # the 1008 policy violation race condition with native audio models.
+    # Gate to pause ALL realtime input (audio + screen frames) during
+    # sensitive operations. Native audio models reject sendRealtimeInput
+    # during tool calls and agent transitions, causing 1008 errors.
     audio_gate = asyncio.Event()
-    audio_gate.set()  # Start with audio flowing
+    # Start CLOSED — only open after model produces first audio output,
+    # proving the connection is ready to accept realtime input.
+    audio_gate.clear()
 
     run_config = RunConfig(
         streaming_mode=StreamingMode.BIDI,
@@ -142,8 +144,7 @@ async def interview_ws(websocket: WebSocket, session_token: str):
 
                 if "bytes" in message:
                     # Raw audio data from client mic
-                    # Drop audio frames during agent transitions to prevent
-                    # 1008 policy violation race condition
+                    # Drop ALL realtime input when gate is closed
                     if not audio_gate.is_set():
                         continue
                     audio_blob = types.Blob(
@@ -166,7 +167,9 @@ async def interview_ws(websocket: WebSocket, session_token: str):
                             live_request_queue.send_content(content)
 
                         elif msg_type == "screen_frame":
-                            # Screen capture frame (base64 JPEG)
+                            # Screen capture frame — also gated to prevent 1008
+                            if not audio_gate.is_set():
+                                continue
                             image_data = base64.b64decode(msg["data"])
                             image_blob = types.Blob(
                                 mime_type=msg.get("mimeType", "image/jpeg"),
@@ -200,97 +203,160 @@ async def interview_ws(websocket: WebSocket, session_token: str):
 
     async def downstream_task():
         """Receive events from run_live(), send to WebSocket."""
-        try:
-            async for event in runner.run_live(
-                user_id=user_id,
-                session_id=adk_session_id,
-                live_request_queue=live_request_queue,
-                run_config=run_config,
-            ):
-                # Detect agent transfer events and gate audio during transitions
-                if (
-                    event.content
-                    and event.content.parts
-                    and any(
-                        p.function_response and p.function_response.name == "transfer_to_agent"
-                        for p in event.content.parts
-                    )
+        gate_timeout_task: asyncio.Task | None = None
+        model_speaking = False
+
+        async def _gate_with_timeout(seconds: float):
+            """Safety timeout to re-open audio gate if no signal arrives."""
+            await asyncio.sleep(seconds)
+            if not audio_gate.is_set():
+                audio_gate.set()
+                logger.info("Audio gate re-opened by safety timeout")
+
+        def _open_gate():
+            nonlocal gate_timeout_task
+            if gate_timeout_task and not gate_timeout_task.done():
+                gate_timeout_task.cancel()
+            audio_gate.set()
+
+        def _close_gate(timeout: float = 5.0):
+            nonlocal gate_timeout_task
+            audio_gate.clear()
+            if gate_timeout_task and not gate_timeout_task.done():
+                gate_timeout_task.cancel()
+            gate_timeout_task = asyncio.create_task(_gate_with_timeout(timeout))
+
+        max_retries = 3
+        for attempt in range(max_retries + 1):
+            try:
+                async for event in runner.run_live(
+                    user_id=user_id,
+                    session_id=adk_session_id,
+                    live_request_queue=live_request_queue,
+                    run_config=run_config,
                 ):
-                    logger.info("Agent transfer detected, pausing audio stream")
+                    if event.content and event.content.parts:
+                        has_function_call = any(
+                            p.function_call for p in event.content.parts
+                        )
+                        has_function_response = any(
+                            p.function_response for p in event.content.parts
+                        )
+                        has_audio = any(
+                            p.inline_data and p.inline_data.data
+                            for p in event.content.parts
+                        )
+
+                        # Gate audio during tool calls
+                        if has_function_call:
+                            logger.info("Function call detected, pausing realtime input")
+                            _close_gate(5.0)
+
+                        if has_function_response:
+                            logger.info("Function response, resuming realtime input")
+                            _open_gate()
+
+                        # When model produces audio output, track speaking state.
+                        # Open gate when model STOPS speaking (it's ready for input).
+                        if has_audio:
+                            if not model_speaking:
+                                model_speaking = True
+                                logger.info("Model started speaking, gate stays closed during speech")
+                        else:
+                            if model_speaking and not has_function_call:
+                                model_speaking = False
+                                logger.info("Model stopped speaking, opening gate for input")
+                                _open_gate()
+
+                    # Extract audio and send explicitly
+                    if event.content and event.content.parts:
+                        for part in event.content.parts:
+                            if part.inline_data and part.inline_data.data:
+                                audio_b64 = base64.b64encode(part.inline_data.data).decode("utf-8")
+                                await websocket.send_text(json.dumps({
+                                    "type": "agent.audio",
+                                    "data": audio_b64,
+                                }))
+
+                    # Forward all events as JSON to the client
+                    event_json = event.model_dump_json(exclude_none=True, by_alias=True)
+                    await websocket.send_text(event_json)
+
+                    # Track transcription
+                    state = get_session_state_by_token(session_token)
+
+                    if event.input_transcription and event.input_transcription.text:
+                        finished = getattr(event.input_transcription, "finished", False)
+                        logger.info(
+                            f"[TRANSCRIPT IN] candidate {'FINAL' if finished else 'partial'}: "
+                            f"\"{event.input_transcription.text[:80]}...\""
+                        )
+                        if finished:
+                            state.setdefault("transcript", []).append({
+                                "speaker": "candidate",
+                                "text": event.input_transcription.text,
+                            })
+
+                    if event.output_transcription and event.output_transcription.text:
+                        finished = getattr(event.output_transcription, "finished", False)
+                        logger.info(
+                            f"[TRANSCRIPT OUT] clair {'FINAL' if finished else 'partial'}: "
+                            f"\"{event.output_transcription.text[:80]}...\""
+                        )
+                        if finished:
+                            state.setdefault("transcript", []).append({
+                                "speaker": "clair",
+                                "text": event.output_transcription.text,
+                            })
+
+                    # Check if interview ended
+                    if state.get("interview_ended"):
+                        transcript = state.get("transcript", [])
+                        scores = state.get("scores", {})
+                        result_data = {
+                            "overall_score": scores.get("overall_score", 0),
+                            "recommendation": scores.get("recommendation", "no_hire"),
+                            "summary": scores.get("summary", "Interview completed."),
+                            "transcript": [
+                                {"speaker": t["speaker"], "text": t["text"], "timestamp": float(i)}
+                                for i, t in enumerate(transcript)
+                            ],
+                            "score_breakdown": scores.get("score_breakdown", {
+                                "communication": 0,
+                                "technical_knowledge": 0,
+                                "problem_solving": 0,
+                                "coding_skills": 0,
+                                "system_design": 0,
+                            }),
+                            "key_moments": [],
+                        }
+                        await post_result(session_id, result_data)
+                        await websocket.send_text(json.dumps({
+                            "type": "interview_complete",
+                            "message": "Interview has been completed. Results are being processed.",
+                        }))
+                        return  # Exit cleanly
+
+                break  # Normal completion
+
+            except WebSocketDisconnect:
+                logger.info(f"Client disconnected during downstream: {session_token}")
+                break
+            except Exception as e:
+                err_str = str(e)
+                is_retryable = any(code in err_str for code in ("1008", "1007", "1011"))
+                if is_retryable and attempt < max_retries:
+                    logger.warning(
+                        f"Connection error (attempt {attempt + 1}/{max_retries}): {err_str[:100]}, "
+                        f"pausing realtime input and retrying..."
+                    )
                     audio_gate.clear()
-
-                    async def _reopen_gate():
-                        await asyncio.sleep(3)  # Wait for new agent to connect
-                        audio_gate.set()
-                        logger.info("Audio stream resumed after agent transfer")
-
-                    asyncio.create_task(_reopen_gate())
-
-                # Extract audio from content parts and send explicitly
-                # (model_dump_json may not encode bytes in a way atob() can decode)
-                if event.content and event.content.parts:
-                    for part in event.content.parts:
-                        if part.inline_data and part.inline_data.data:
-                            audio_b64 = base64.b64encode(part.inline_data.data).decode("utf-8")
-                            await websocket.send_text(json.dumps({
-                                "type": "agent.audio",
-                                "data": audio_b64,
-                            }))
-
-                # Forward all events as JSON to the client (for transcriptions etc.)
-                event_json = event.model_dump_json(exclude_none=True, by_alias=True)
-                await websocket.send_text(event_json)
-
-                # Track transcription for result posting
-                state = get_session_state_by_token(session_token)
-
-                if event.input_transcription and event.input_transcription.text:
-                    if getattr(event.input_transcription, "finished", False):
-                        state.setdefault("transcript", []).append({
-                            "speaker": "candidate",
-                            "text": event.input_transcription.text,
-                        })
-
-                if event.output_transcription and event.output_transcription.text:
-                    if getattr(event.output_transcription, "finished", False):
-                        state.setdefault("transcript", []).append({
-                            "speaker": "clair",
-                            "text": event.output_transcription.text,
-                        })
-
-                # Check if interview ended (scorer called end_interview tool)
-                if state.get("interview_ended"):
-                    # Build result from scorer agent's actual scores
-                    transcript = state.get("transcript", [])
-                    scores = state.get("scores", {})
-                    result_data = {
-                        "overall_score": scores.get("overall_score", 0),
-                        "recommendation": scores.get("recommendation", "no_hire"),
-                        "summary": scores.get("summary", "Interview completed."),
-                        "transcript": [
-                            {"speaker": t["speaker"], "text": t["text"], "timestamp": float(i)}
-                            for i, t in enumerate(transcript)
-                        ],
-                        "score_breakdown": scores.get("score_breakdown", {
-                            "communication": 0,
-                            "technical_knowledge": 0,
-                            "problem_solving": 0,
-                            "coding_skills": 0,
-                            "system_design": 0,
-                        }),
-                        "key_moments": [],
-                    }
-                    await post_result(session_id, result_data)
-                    await websocket.send_text(json.dumps({
-                        "type": "interview_complete",
-                        "message": "Interview has been completed. Results are being processed.",
-                    }))
-                    break
-
-        except WebSocketDisconnect:
-            logger.info(f"Client disconnected during downstream: {session_token}")
-        except Exception as e:
-            logger.error(f"Downstream error: {e}", exc_info=True)
+                    model_speaking = False
+                    await asyncio.sleep(2)
+                    # Gate stays closed — will reopen when model produces audio
+                    continue
+                logger.error(f"Downstream error: {e}", exc_info=True)
+                break
 
     try:
         await asyncio.gather(
