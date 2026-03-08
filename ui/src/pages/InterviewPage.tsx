@@ -21,7 +21,6 @@ import InterviewChat, {
 } from '../components/interview-session/InterviewChat';
 import CodeEditor from '../components/interview-session/CodeEditor';
 import InterviewTimer from '../components/interview-session/InterviewTimer';
-import StageIndicator from '../components/interview-session/StageIndicator';
 import {
   useWebSocket,
   type CodingChallenge,
@@ -37,7 +36,6 @@ export default function InterviewPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [challenge, setChallenge] = useState<CodingChallenge | null>(null);
   const [code, setCode] = useState('');
-  const [stage, setStage] = useState('warmup');
   const [showEditor, setShowEditor] = useState(false);
   const [showScreenShareDialog, setShowScreenShareDialog] = useState(false);
   const [interviewStarted, setInterviewStarted] = useState(false); // true when Clair speaks
@@ -139,9 +137,7 @@ export default function InterviewPage() {
     setCode(c.starter_code || '');
   }, []);
 
-  const handleStageChange = useCallback((newStage: string, action: string) => {
-    setStage(newStage);
-
+  const handleStageChange = useCallback((_newStage: string, action: string) => {
     if (action === 'show_editor') {
       setShowEditor(true);
     } else if (action === 'hide_editor') {
@@ -315,7 +311,6 @@ export default function InterviewPage() {
           {error && <Chip label={error} color="error" size="small" />}
         </Box>
         <Box display="flex" alignItems="center" gap={2}>
-          <StageIndicator currentStage={stage} />
           <InterviewTimer startTime={interviewStarted ? startTimeRef.current : null} />
           <AudioControls
             isRecording={isRecording}
