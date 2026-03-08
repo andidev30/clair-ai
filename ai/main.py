@@ -364,6 +364,16 @@ async def interview_ws(websocket: WebSocket, session_token: str):
                     )
                     audio_gate.clear()
                     model_speaking = False
+                    if gate_timeout_task and not gate_timeout_task.done():
+                        gate_timeout_task.cancel()
+                        gate_timeout_task = None
+                    # Drain stale realtime audio so the new connection doesn't
+                    # receive old bytes before it's initialized (causes 1007).
+                    while not live_request_queue._queue.empty():
+                        try:
+                            live_request_queue._queue.get_nowait()
+                        except asyncio.QueueEmpty:
+                            break
                     await asyncio.sleep(2)
                     # Gate stays closed — will reopen when model produces audio
                     continue
