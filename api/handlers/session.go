@@ -33,14 +33,24 @@ func CreateSession(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Interview not found"})
 	}
 
+	var input models.CreateSessionInput
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
+	}
+
+	if input.CandidateName == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Candidate name is required"})
+	}
+
 	now := time.Now()
 	session := models.Session{
-		ID:          uuid.New().String(),
-		InterviewID: interviewID,
-		Status:      "pending",
-		Token:       generateToken(),
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:            uuid.New().String(),
+		InterviewID:   interviewID,
+		CandidateName: input.CandidateName,
+		Status:        "pending",
+		Token:         generateToken(),
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 
 	col := database.DB.Collection("sessions")

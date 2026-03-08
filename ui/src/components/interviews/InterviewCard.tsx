@@ -1,7 +1,7 @@
 import { Box, Button, Card, CardContent, Chip, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import PersonIcon from '@mui/icons-material/Person';
+
 import WorkIcon from '@mui/icons-material/Work';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useNavigate } from 'react-router';
@@ -34,10 +34,6 @@ export default function InterviewCard({ interview, onEdit, onDelete }: Interview
         </Box>
 
         <Stack spacing={0.75}>
-          <Box display="flex" alignItems="center" gap={1}>
-            <PersonIcon fontSize="small" color="action" />
-            <Typography variant="body2">{interview.candidate_name}</Typography>
-          </Box>
           <Box display="flex" alignItems="center" gap={1}>
             <WorkIcon fontSize="small" color="action" />
             <Typography variant="body2">{interview.position}</Typography>

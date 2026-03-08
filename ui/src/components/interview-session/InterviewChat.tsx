@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Box, Paper, Typography } from '@mui/material';
+import { Box, Paper, Typography, CircularProgress, Stack } from '@mui/material';
 
 export interface ChatMessage {
   speaker: 'clair' | 'candidate';
@@ -30,14 +30,12 @@ export default function InterviewChat({ messages }: InterviewChatProps) {
       }}
     >
       {messages.length === 0 && (
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          textAlign="center"
-          mt={4}
-        >
-          Waiting for Clair to start the interview...
-        </Typography>
+        <Stack spacing={3} alignItems="center" mt={8}>
+          <CircularProgress size={40} thickness={4} />
+          <Typography variant="body1" color="text.secondary" fontWeight={500}>
+            Waiting for Clair to start the interview...
+          </Typography>
+        </Stack>
       )}
       {messages.map((msg, i) => (
         <Box

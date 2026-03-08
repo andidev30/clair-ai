@@ -4,13 +4,18 @@ import TimerIcon from '@mui/icons-material/Timer';
 import { Box } from '@mui/material';
 
 interface InterviewTimerProps {
-  startTime: number;
+  startTime: number | null;
 }
 
 export default function InterviewTimer({ startTime }: InterviewTimerProps) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
+    if (startTime === null) {
+      setElapsed(0);
+      return;
+    }
+
     const interval = setInterval(() => {
       setElapsed(Math.floor((Date.now() - startTime) / 1000));
     }, 1000);

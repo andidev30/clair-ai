@@ -5,6 +5,10 @@ import {
   Button,
   Chip,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   Paper,
   Stack,
@@ -27,6 +31,8 @@ export default function InterviewSetupPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
+  const [showCandidateDialog, setShowCandidateDialog] = useState(false);
+  const [candidateName, setCandidateName] = useState('');
 
   const { data: interview, isLoading, error } = useQuery({
     queryKey: ['interview', id],
@@ -41,11 +47,24 @@ export default function InterviewSetupPage() {
   });
 
   const createSessionMutation = useMutation({
-    mutationFn: () => createSession(id!),
+    mutationFn: (name: string) => createSession(id!, name),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sessions', id] });
+      setShowCandidateDialog(false);
+      setCandidateName('');
     },
   });
+
+  const handleGenerateLink = () => {
+    setCandidateName('');
+    setShowCandidateDialog(true);
+  };
+
+  const handleConfirmGenerate = () => {
+    if (candidateName.trim()) {
+      createSessionMutation.mutate(candidateName.trim());
+    }
+  };
 
   const getInterviewUrl = (session: Session) => {
     return `${window.location.origin}/interview/${session.token}`;
@@ -75,9 +94,6 @@ export default function InterviewSetupPage() {
           {interview.title}
         </Typography>
         <Stack spacing={1} sx={{ mb: 2 }}>
-          <Typography variant="body1">
-            <strong>Candidate:</strong> {interview.candidate_name}
-          </Typography>
           <Typography variant="body1">
             <strong>Position:</strong> {interview.position}
           </Typography>
@@ -115,10 +131,9 @@ export default function InterviewSetupPage() {
           <Button
             variant="contained"
             startIcon={<LinkIcon />}
-            onClick={() => createSessionMutation.mutate()}
-            disabled={createSessionMutation.isPending}
+            onClick={handleGenerateLink}
           >
-            {createSessionMutation.isPending ? 'Creating...' : 'Generate Link'}
+            Generate Link
           </Button>
         </Box>
 
@@ -135,18 +150,22 @@ export default function InterviewSetupPage() {
             <Paper key={session.id} variant="outlined" sx={{ p: 2 }}>
               <Box display="flex" justifyContent="space-between" alignItems="center">
                 <Box>
-                  <Chip
-                    label={session.status}
-                    size="small"
-                    color={
-                      session.status === 'completed'
-                        ? 'success'
-                        : session.status === 'in_progress'
-                          ? 'warning'
-                          : 'default'
-                    }
-                    sx={{ mb: 1 }}
-                  />
+                  <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                    <Typography variant="body2" fontWeight={600}>
+                      {session.candidate_name}
+                    </Typography>
+                    <Chip
+                      label={session.status}
+                      size="small"
+                      color={
+                        session.status === 'completed'
+                          ? 'success'
+                          : session.status === 'in_progress'
+                            ? 'warning'
+                            : 'default'
+                      }
+                    />
+                  </Box>
                   <TextField
                     value={getInterviewUrl(session)}
                     size="small"
@@ -182,6 +201,44 @@ export default function InterviewSetupPage() {
           ))}
         </Stack>
       </Paper>
+
+      {/* Candidate Name Dialog */}
+      <Dialog
+        open={showCandidateDialog}
+        onClose={() => setShowCandidateDialog(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Generate Interview Link</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Candidate Name"
+            value={candidateName}
+            onChange={(e) => setCandidateName(e.target.value)}
+            fullWidth
+            required
+            autoFocus
+            sx={{ mt: 1 }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && candidateName.trim()) {
+                handleConfirmGenerate();
+              }
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setShowCandidateDialog(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmGenerate}
+            variant="contained"
+            disabled={!candidateName.trim() || createSessionMutation.isPending}
+          >
+            {createSessionMutation.isPending ? 'Creating...' : 'Generate'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }

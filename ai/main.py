@@ -74,6 +74,8 @@ async def interview_ws(websocket: WebSocket, session_token: str):
         return
 
     interview_config = session_data.get("interview", {})
+    # candidate_name is now stored on the session, not the interview
+    interview_config["candidate_name"] = session_data.get("candidate_name", interview_config.get("candidate_name", "the candidate"))
     session_id = session_data.get("id", session_token)
 
     # Set up per-session state for tools (keyed by token)
@@ -135,7 +137,7 @@ async def interview_ws(websocket: WebSocket, session_token: str):
             # Wait for run_live to start, then trigger AI to greet first
             await asyncio.sleep(2)
             initial_greeting = types.Content(
-                parts=[types.Part(text="The candidate has just joined the interview. Please greet them and start the warm-up.")]
+                parts=[types.Part(text="The candidate just hopped on. Say hi and get the conversation going naturally — keep it casual.")]
             )
             live_request_queue.send_content(initial_greeting)
 

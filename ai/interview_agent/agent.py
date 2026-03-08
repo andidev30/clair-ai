@@ -23,7 +23,7 @@ def create_interview_agent(interview_config: dict | None = None) -> Agent:
         speech_config=types.SpeechConfig(
             voice_config=types.VoiceConfig(
                 prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                    voice_name="Kore"
+                    voice_name="Orus"
                 )
             ),
             language_code="en-US",

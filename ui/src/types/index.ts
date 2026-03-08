@@ -29,7 +29,6 @@ export interface Interview {
 
 export interface CreateInterviewInput {
   title: string;
-  candidate_name: string;
   position: string;
   level: InterviewLevelType;
   tech_stack: string[];
@@ -38,7 +37,6 @@ export interface CreateInterviewInput {
 
 export interface UpdateInterviewInput {
   title?: string;
-  candidate_name?: string;
   position?: string;
   level?: InterviewLevelType;
   tech_stack?: string[];
@@ -53,6 +51,7 @@ export interface LoginResponse {
 export interface Session {
   id: string;
   interview_id: string;
+  candidate_name: string;
   status: 'pending' | 'in_progress' | 'completed';
   token: string;
   started_at?: string;

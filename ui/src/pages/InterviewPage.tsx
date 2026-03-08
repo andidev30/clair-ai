@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import { useParams } from 'react-router';
 import {
   Box,
@@ -40,7 +40,8 @@ export default function InterviewPage() {
   const [stage, setStage] = useState('warmup');
   const [showEditor, setShowEditor] = useState(false);
   const [showScreenShareDialog, setShowScreenShareDialog] = useState(false);
-  const startTimeRef = useRef(Date.now());
+  const [interviewStarted, setInterviewStarted] = useState(false); // true when Clair speaks
+  const startTimeRef = useRef<number | null>(null);
 
   // Audio playback — queue buffers so they play sequentially without gaps
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -181,6 +182,18 @@ export default function InterviewPage() {
     onFrame: sendScreenFrame,
   });
 
+  // Watch for the first message to officially "start" the interview
+  useEffect(() => {
+    if (started && !interviewStarted && messages.length > 0) {
+      // Clair has sent a message, start the interview
+      setInterviewStarted(true);
+      startTimeRef.current = Date.now();
+
+      // Delay mic start slightly to avoid immediate feedback loop or clipping
+      setTimeout(() => startMic(), 500);
+    }
+  }, [messages, started, interviewStarted, startMic]);
+
   // Keep refs in sync
   stopMicRef.current = stopMic;
   stopScreenRef.current = stopScreen;
@@ -189,10 +202,8 @@ export default function InterviewPage() {
     // Create AudioContext on user gesture so browser allows playback
     ensureAudioContext();
     connect();
-    startTimeRef.current = Date.now();
     setStarted(true);
-    // Delay mic start to let WS connect
-    setTimeout(() => startMic(), 1000);
+    // Timer and mic will start automatically when Clair sends the first message
   };
 
   const handleEnd = () => {
@@ -305,7 +316,7 @@ export default function InterviewPage() {
         </Box>
         <Box display="flex" alignItems="center" gap={2}>
           <StageIndicator currentStage={stage} />
-          <InterviewTimer startTime={startTimeRef.current} />
+          <InterviewTimer startTime={interviewStarted ? startTimeRef.current : null} />
           <AudioControls
             isRecording={isRecording}
             onToggleMic={handleToggleMic}

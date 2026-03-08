@@ -5,9 +5,10 @@ import type {
 } from '../types';
 import apiClient from './client';
 
-export async function createSession(interviewId: string): Promise<Session> {
+export async function createSession(interviewId: string, candidateName: string): Promise<Session> {
   const { data } = await apiClient.post<Session>(
     `/api/interviews/${interviewId}/sessions`,
+    { candidate_name: candidateName },
   );
   return data;
 }

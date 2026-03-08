@@ -27,7 +27,6 @@ export default function InterviewForm({
   isSubmitting,
 }: InterviewFormProps) {
   const [title, setTitle] = useState('');
-  const [candidateName, setCandidateName] = useState('');
   const [position, setPosition] = useState('');
   const [level, setLevel] = useState<string>('junior');
   const [techStack, setTechStack] = useState('');
@@ -36,14 +35,12 @@ export default function InterviewForm({
   useEffect(() => {
     if (interview) {
       setTitle(interview.title);
-      setCandidateName(interview.candidate_name);
       setPosition(interview.position);
       setLevel(interview.level);
       setTechStack(interview.tech_stack?.join(', ') ?? '');
       setJobDescription(interview.job_description ?? '');
     } else {
       setTitle('');
-      setCandidateName('');
       setPosition('');
       setLevel('junior');
       setTechStack('');
@@ -54,7 +51,6 @@ export default function InterviewForm({
   const handleSubmit = () => {
     onSubmit({
       title,
-      candidate_name: candidateName,
       position,
       level: level as CreateInterviewInput['level'],
       tech_stack: techStack
@@ -66,7 +62,7 @@ export default function InterviewForm({
   };
 
   const isEdit = !!interview;
-  const isValid = title.trim() && candidateName.trim() && position.trim();
+  const isValid = title.trim() && position.trim();
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -82,16 +78,7 @@ export default function InterviewForm({
               required
             />
           </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
-            <TextField
-              label="Candidate Name"
-              value={candidateName}
-              onChange={(e) => setCandidateName(e.target.value)}
-              fullWidth
-              required
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
+          <Grid size={{ xs: 12 }}>
             <TextField
               label="Position"
               value={position}
