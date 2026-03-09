@@ -19,14 +19,11 @@ case "$choice" in
   *) echo "Pilihan tidak valid!"; exit 1 ;;
 esac
 
-# echo "========================================="
-# echo "Memeriksa kesiapan GCR / Artifact Registry"
-# echo "========================================="
-# PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
-# if [ -z "$PROJECT_ID" ]; then
-#   echo "Error: PROJECT_ID tidak ditemukan. Pastikan Anda sudah login ke gcloud."
-#   exit 1
-# fi
+PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
+if [ -z "$PROJECT_ID" ]; then
+  echo "Error: PROJECT_ID tidak ditemukan. Pastikan Anda sudah login ke gcloud."
+  exit 1
+fi
 
 deploy() {
   local service=$1
