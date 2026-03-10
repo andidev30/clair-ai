@@ -7,8 +7,6 @@ from google.genai import types
 from interview_agent.prompts import CLAIR_SYSTEM_PROMPT
 from interview_agent.tools import (
     send_coding_challenge_tool,
-    observe_screen_tool,
-    observe_camera_tool,
     end_interview_tool,
     get_cheating_signals_tool,
 )
@@ -51,8 +49,6 @@ Note: You DO NOT have the candidate's resume. Do not claim to have read their re
         description="Clair - Senior Software Engineer conducting a technical interview.",
         tools=[
             send_coding_challenge_tool,
-            observe_screen_tool,
-            observe_camera_tool,
             end_interview_tool,
             get_cheating_signals_tool,
         ],

@@ -30,7 +30,7 @@ export default function InterviewSetupPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [copied, setCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showCandidateDialog, setShowCandidateDialog] = useState(false);
   const [candidateName, setCandidateName] = useState('');
 
@@ -72,8 +72,10 @@ export default function InterviewSetupPage() {
 
   const handleCopyLink = (session: Session) => {
     navigator.clipboard.writeText(getInterviewUrl(session));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedId(session.id);
+    setTimeout(() => {
+      setCopiedId((prevId) => (prevId === session.id ? null : prevId));
+    }, 2000);
   };
 
   if (isLoading) return <LoadingSpinner />;
@@ -149,13 +151,19 @@ export default function InterviewSetupPage() {
           {sessions?.map((session) => (
             <Paper key={session.id} variant="outlined" sx={{ p: 2 }}>
               <Box display="flex" justifyContent="space-between" alignItems="center">
-                <Box>
-                  <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                <Box sx={{ flexGrow: 1, mr: 2 }}>
+                  <Box display="flex" alignItems="center" gap={1} mb={session.status === 'completed' ? 0 : 0.5}>
                     <Typography variant="body2" fontWeight={600}>
                       {session.candidate_name}
                     </Typography>
                     <Chip
-                      label={session.status}
+                      label={
+                        session.status === 'completed'
+                          ? 'Completed'
+                          : session.status === 'in_progress'
+                            ? 'In Progress'
+                            : 'Pending'
+                      }
                       size="small"
                       color={
                         session.status === 'completed'
@@ -166,26 +174,32 @@ export default function InterviewSetupPage() {
                       }
                     />
                   </Box>
-                  <TextField
-                    value={getInterviewUrl(session)}
-                    size="small"
-                    fullWidth
-                    slotProps={{ input: { readOnly: true } }}
-                    sx={{ mt: 1 }}
-                  />
+                  {session.status !== 'completed' && (
+                    <TextField
+                      value={getInterviewUrl(session)}
+                      size="small"
+                      fullWidth
+                      slotProps={{ input: { readOnly: true } }}
+                      sx={{ mt: 1 }}
+                    />
+                  )}
                 </Box>
-                <Stack direction="row" spacing={1} ml={2}>
-                  <Button
-                    startIcon={<ContentCopyIcon />}
-                    onClick={() => handleCopyLink(session)}
-                    size="small"
-                  >
-                    {copied ? 'Copied!' : 'Copy'}
-                  </Button>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  {session.status !== 'completed' && (
+                    <Button
+                      startIcon={<ContentCopyIcon />}
+                      onClick={() => handleCopyLink(session)}
+                      size="small"
+                      variant="outlined"
+                    >
+                      {copiedId === session.id ? 'Copied!' : 'Copy'}
+                    </Button>
+                  )}
                   {session.status === 'completed' && (
                     <Button
-                      variant="outlined"
+                      variant="contained"
                       size="small"
+                      color="primary"
                       onClick={() =>
                         navigate(
                           `/interviews/${id}/sessions/${session.id}/results`,

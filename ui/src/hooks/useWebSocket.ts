@@ -169,6 +169,12 @@ export function useWebSocket({
     }
   }, []);
 
+  const sendCandidateReady = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'candidate_ready' }));
+    }
+  }, []);
+
   const sendCheatingSignal = useCallback((signal: CheatingSignal) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'cheating_signal', ...signal }));
@@ -195,6 +201,7 @@ export function useWebSocket({
     sendScreenFrame,
     sendCameraFrame,
     endInterview,
+    sendCandidateReady,
     sendCheatingSignal,
     connected,
     error,

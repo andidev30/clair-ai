@@ -120,10 +120,6 @@ func JoinSession(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Invalid interview link"})
 	}
 
-	if session.Status == "completed" {
-		return c.Status(fiber.StatusGone).JSON(fiber.Map{"error": "This interview session has already been completed"})
-	}
-
 	// Get interview config
 	interviewCol := database.DB.Collection("interviews")
 	var interview models.Interview

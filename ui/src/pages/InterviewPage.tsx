@@ -1,5 +1,9 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
 import { useParams } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
+import { joinSession } from '../api/sessions';
+import LoadingSpinner from '../components/common/LoadingSpinner';
+import ErrorAlert from '../components/common/ErrorAlert';
 import {
   Box,
   Button,
@@ -14,6 +18,7 @@ import {
   Paper,
   Tooltip,
   Typography,
+  CircularProgress,
 } from '@mui/material';
 import CallEndIcon from '@mui/icons-material/CallEnd';
 import ScreenShareIcon from '@mui/icons-material/ScreenShare';
@@ -37,8 +42,22 @@ import { useCameraCapture } from '../hooks/useCameraCapture';
 
 export default function InterviewPage() {
   const { token } = useParams<{ token: string }>();
+
+  const { data: sessionData, isLoading: sessionLoading, error: sessionError } = useQuery({
+    queryKey: ['session', token],
+    queryFn: () => joinSession(token!),
+    enabled: !!token,
+  });
+
   const [started, setStarted] = useState(false);
   const [complete, setComplete] = useState(false);
+
+  useEffect(() => {
+    if (sessionData?.status === 'completed') {
+      setComplete(true);
+    }
+  }, [sessionData]);
+  const [isEnding, setIsEnding] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [challenge, setChallenge] = useState<CodingChallenge | null>(null);
   const [code, setCode] = useState('');
@@ -124,6 +143,14 @@ export default function InterviewPage() {
           return updated;
         }
 
+        // FINAL arrived but other speaker spoke since → update old message in place
+        if (!existing.finished && !isLastMessage && msg.finished) {
+          console.log('[Transcript] FINAL update (interleaved)', msg.speaker);
+          const updated = [...prev];
+          updated[sameIdx] = { ...existing, text: msg.text, finished: true };
+          return updated;
+        }
+
         // Already finished or other speaker spoke since → check for duplicate/replay
         const existTrimmed = existing.text.trim();
         const newTrimmed = msg.text.trim();
@@ -139,9 +166,10 @@ export default function InterviewPage() {
         }
       }
 
-      // No matching speaker found, or genuinely new utterance → append
+      // New utterance → mark all previous unfinished messages as finished, then append
       console.log('[Transcript] ADD new', msg.speaker, `"${msg.text.substring(0, 60)}..."`);
-      return [...prev, { speaker: msg.speaker, text: msg.text, finished: msg.finished }];
+      const finishedPrev = prev.map(m => m.finished ? m : { ...m, finished: true });
+      return [...finishedPrev, { speaker: msg.speaker, text: msg.text, finished: msg.finished }];
     });
   }, []);
 
@@ -170,6 +198,7 @@ export default function InterviewPage() {
     sendScreenFrame,
     sendCameraFrame,
     endInterview,
+    sendCandidateReady,
     sendCheatingSignal,
     connected,
     error,
@@ -206,17 +235,13 @@ export default function InterviewPage() {
     }
   }, [cameraStream]);
 
-  // Watch for the first message to officially "start" the interview
+  // Watch for the first message to officially "start" the interview timer & mic
   useEffect(() => {
     if (started && !interviewStarted && messages.length > 0) {
-      // Clair has sent a message, start the interview
       setInterviewStarted(true);
       startTimeRef.current = Date.now();
-
       // Delay mic start slightly to avoid immediate feedback loop or clipping
       setTimeout(() => startMic(), 500);
-      // Prompt camera consent
-      setShowCameraDialog(true);
     }
   }, [messages, started, interviewStarted, startMic]);
 
@@ -241,15 +266,23 @@ export default function InterviewPage() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [started, sendCheatingSignal]);
 
+  const handleCameraDialogDone = useCallback(() => {
+    setShowCameraDialog(false);
+    // Signal backend that candidate is ready — triggers Clair's greeting
+    sendCandidateReady();
+  }, [sendCandidateReady]);
+
   const handleStart = async () => {
     // Create AudioContext on user gesture so browser allows playback
     ensureAudioContext();
     connect();
     setStarted(true);
-    // Timer and mic will start automatically when Clair sends the first message
+    // Show camera dialog first — Clair will greet after candidate handles it
+    setShowCameraDialog(true);
   };
 
   const handleEnd = () => {
+    setIsEnding(true);
     endInterview();
     stopMic();
     stopScreen();
@@ -270,6 +303,14 @@ export default function InterviewPage() {
     setShowScreenShareDialog(false);
   };
 
+  if (sessionLoading) {
+    return <LoadingSpinner />;
+  }
+
+  if (sessionError) {
+    return <ErrorAlert message="Failed to load interview session. It may be invalid or expired." />;
+  }
+
   if (complete) {
     return (
       <Box
@@ -286,6 +327,29 @@ export default function InterviewPage() {
           <Typography variant="body1" color="text.secondary">
             Thank you for your time! Your results are being processed and will
             be shared with the interviewer.
+          </Typography>
+        </Paper>
+      </Box>
+    );
+  }
+
+  if (isEnding) {
+    return (
+      <Box
+        display="flex"
+        justifyContent="center"
+        alignItems="center"
+        minHeight="100vh"
+        bgcolor="background.default"
+      >
+        <Paper sx={{ p: 6, textAlign: 'center', maxWidth: 500 }}>
+          <CircularProgress size={64} sx={{ mb: 4 }} />
+          <Typography variant="h5" fontWeight={700} gutterBottom>
+            Finishing Interview
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Please wait while we wrap up and save your results.
+            Do not close this tab.
           </Typography>
         </Paper>
       </Box>
@@ -490,7 +554,7 @@ export default function InterviewPage() {
       {/* Camera consent dialog */}
       <Dialog
         open={showCameraDialog}
-        onClose={() => setShowCameraDialog(false)}
+        onClose={handleCameraDialogDone}
       >
         <DialogTitle>Enable Camera</DialogTitle>
         <DialogContent>
@@ -501,9 +565,9 @@ export default function InterviewPage() {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowCameraDialog(false)}>Dismiss</Button>
+          <Button onClick={handleCameraDialogDone}>Dismiss</Button>
           <Button
-            onClick={() => { startCamera(); setShowCameraDialog(false); }}
+            onClick={() => { startCamera(); handleCameraDialogDone(); }}
             variant="contained"
             startIcon={<VideocamIcon />}
           >
