@@ -93,6 +93,24 @@ def observe_screen() -> dict:
     return {"screen_content": "No screen is currently being shared by the candidate."}
 
 
+def observe_camera() -> dict:
+    """Get a description of what's currently visible on the candidate's camera.
+
+    Use this to check for suspicious behavior like looking away from screen,
+    another person being present, or reading from notes/second screen.
+
+    Returns:
+        The latest camera observation or a message if camera is not active.
+    """
+    state = get_session_state()
+    if not state.get("camera_active"):
+        return {"camera_content": "Camera is not active. The candidate has not enabled their camera."}
+    observation = state.get("latest_camera_observation", "")
+    if observation:
+        return {"camera_content": observation}
+    return {"camera_content": "Camera is active but no observation available yet."}
+
+
 def end_interview(
     overall_score: float,
     recommendation: str,
@@ -169,5 +187,6 @@ def get_cheating_signals() -> dict:
 
 send_coding_challenge_tool = FunctionTool(send_coding_challenge)
 observe_screen_tool = FunctionTool(observe_screen)
+observe_camera_tool = FunctionTool(observe_camera)
 end_interview_tool = FunctionTool(end_interview)
 get_cheating_signals_tool = FunctionTool(get_cheating_signals)

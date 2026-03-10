@@ -84,6 +84,8 @@ async def interview_ws(websocket: WebSocket, session_token: str):
         "session_id": session_id,
         "interview_config": interview_config,
         "latest_screen_observation": "",
+        "latest_camera_observation": "",
+        "camera_active": False,
         "interview_ended": False,
         "transcript": [],
     })
@@ -183,6 +185,23 @@ async def interview_ws(websocket: WebSocket, session_token: str):
                             state["latest_screen_observation"] = (
                                 "Screen frame received - candidate's code editor is visible"
                             )
+
+                        elif msg_type == "camera_frame":
+                            # Camera capture frame — also gated to prevent 1008
+                            if not audio_gate.is_set():
+                                continue
+                            image_data = base64.b64decode(msg["data"])
+                            image_blob = types.Blob(
+                                mime_type=msg.get("mimeType", "image/jpeg"),
+                                data=image_data,
+                            )
+                            live_request_queue.send_realtime(image_blob)
+                            # Store for observe_camera tool
+                            state = get_session_state_by_token(session_token)
+                            state["latest_camera_observation"] = (
+                                "Camera frame received - candidate visible"
+                            )
+                            state["camera_active"] = True
 
                         elif msg_type == "cheating_signal":
                             # Behavioral cheating signal from frontend — store silently, do NOT inject into live queue

@@ -10,11 +10,15 @@ import {
   DialogContentText,
   DialogTitle,
   Divider,
+  IconButton,
   Paper,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import CallEndIcon from '@mui/icons-material/CallEnd';
 import ScreenShareIcon from '@mui/icons-material/ScreenShare';
+import VideocamIcon from '@mui/icons-material/Videocam';
+import VideocamOffIcon from '@mui/icons-material/VideocamOff';
 import AudioControls from '../components/interview-session/AudioControls';
 import InterviewChat, {
   type ChatMessage,
@@ -29,6 +33,7 @@ import {
 } from '../hooks/useWebSocket';
 import { useAudioStream } from '../hooks/useAudioStream';
 import { useScreenCapture } from '../hooks/useScreenCapture';
+import { useCameraCapture } from '../hooks/useCameraCapture';
 
 export default function InterviewPage() {
   const { token } = useParams<{ token: string }>();
@@ -39,7 +44,9 @@ export default function InterviewPage() {
   const [code, setCode] = useState('');
   const [showEditor, setShowEditor] = useState(false);
   const [showScreenShareDialog, setShowScreenShareDialog] = useState(false);
+  const [showCameraDialog, setShowCameraDialog] = useState(false);
   const [interviewStarted, setInterviewStarted] = useState(false); // true when Clair speaks
+  const cameraPreviewRef = useRef<HTMLVideoElement | null>(null);
   const startTimeRef = useRef<number | null>(null);
 
   // Audio playback — queue buffers so they play sequentially without gaps
@@ -98,9 +105,12 @@ export default function InterviewPage() {
       // Found an existing message from the same speaker
       if (sameIdx >= 0) {
         const existing = prev[sameIdx];
+        const isLastMessage = sameIdx === prev.length - 1;
 
         // Still streaming (unfinished) → update in place
-        if (!existing.finished) {
+        // BUT only if this is the last message — if the other speaker has
+        // spoken since, this is a new turn and needs a fresh bubble.
+        if (!existing.finished && isLastMessage) {
           const updated = [...prev];
           if (msg.finished) {
             // FINAL has full cumulative text → replace for accuracy
@@ -114,13 +124,15 @@ export default function InterviewPage() {
           return updated;
         }
 
-        // Already finished → check for duplicate/replay
+        // Already finished or other speaker spoke since → check for duplicate/replay
         const existTrimmed = existing.text.trim();
         const newTrimmed = msg.text.trim();
         if (
-          existTrimmed === newTrimmed ||
-          (existTrimmed.length > 15 && newTrimmed.startsWith(existTrimmed.substring(0, 30))) ||
-          (newTrimmed.length > 15 && existTrimmed.startsWith(newTrimmed.substring(0, 30)))
+          isLastMessage && (
+            existTrimmed === newTrimmed ||
+            (existTrimmed.length > 15 && newTrimmed.startsWith(existTrimmed.substring(0, 30))) ||
+            (newTrimmed.length > 15 && existTrimmed.startsWith(newTrimmed.substring(0, 30)))
+          )
         ) {
           console.log('[Transcript] SKIP duplicate', msg.speaker);
           return prev;
@@ -150,11 +162,13 @@ export default function InterviewPage() {
 
   const stopMicRef = useRef<() => void>(() => { });
   const stopScreenRef = useRef<() => void>(() => { });
+  const stopCameraRef = useRef<() => void>(() => { });
 
   const {
     connect,
     sendAudio,
     sendScreenFrame,
+    sendCameraFrame,
     endInterview,
     sendCheatingSignal,
     connected,
@@ -169,6 +183,7 @@ export default function InterviewPage() {
       setComplete(true);
       stopMicRef.current();
       stopScreenRef.current();
+      stopCameraRef.current();
     },
   });
 
@@ -180,6 +195,17 @@ export default function InterviewPage() {
     onFrame: sendScreenFrame,
   });
 
+  const { start: startCamera, stop: stopCamera, isActive: isCameraActive, stream: cameraStream } = useCameraCapture({
+    onFrame: sendCameraFrame,
+  });
+
+  // Attach camera stream to preview video element
+  useEffect(() => {
+    if (cameraPreviewRef.current && cameraStream) {
+      cameraPreviewRef.current.srcObject = cameraStream;
+    }
+  }, [cameraStream]);
+
   // Watch for the first message to officially "start" the interview
   useEffect(() => {
     if (started && !interviewStarted && messages.length > 0) {
@@ -189,12 +215,15 @@ export default function InterviewPage() {
 
       // Delay mic start slightly to avoid immediate feedback loop or clipping
       setTimeout(() => startMic(), 500);
+      // Prompt camera consent
+      setShowCameraDialog(true);
     }
   }, [messages, started, interviewStarted, startMic]);
 
   // Keep refs in sync
   stopMicRef.current = stopMic;
   stopScreenRef.current = stopScreen;
+  stopCameraRef.current = stopCamera;
 
   // Tab-switch detection — only active after interview starts
   useEffect(() => {
@@ -224,6 +253,7 @@ export default function InterviewPage() {
     endInterview();
     stopMic();
     stopScreen();
+    stopCamera();
   };
 
   const handleToggleMic = () => {
@@ -335,6 +365,15 @@ export default function InterviewPage() {
             onToggleMic={handleToggleMic}
             getVolume={getVolume}
           />
+          <Tooltip title={isCameraActive ? 'Disable camera' : 'Enable camera'}>
+            <IconButton
+              onClick={() => isCameraActive ? stopCamera() : startCamera()}
+              color={isCameraActive ? 'primary' : 'default'}
+              size="small"
+            >
+              {isCameraActive ? <VideocamIcon /> : <VideocamOffIcon />}
+            </IconButton>
+          </Tooltip>
           {isSharing && (
             <Chip
               icon={<ScreenShareIcon />}
@@ -397,6 +436,33 @@ export default function InterviewPage() {
         )}
       </Box>
 
+      {/* Camera PiP preview */}
+      {isCameraActive && (
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: 16,
+            right: 16,
+            width: 160,
+            height: 120,
+            borderRadius: 2,
+            overflow: 'hidden',
+            border: '2px solid',
+            borderColor: 'primary.main',
+            boxShadow: 3,
+            zIndex: 1000,
+          }}
+        >
+          <video
+            ref={cameraPreviewRef}
+            autoPlay
+            muted
+            playsInline
+            style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
+          />
+        </Box>
+      )}
+
       {/* Screen share request dialog */}
       <Dialog
         open={showScreenShareDialog}
@@ -417,6 +483,31 @@ export default function InterviewPage() {
             startIcon={<ScreenShareIcon />}
           >
             Share Screen
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Camera consent dialog */}
+      <Dialog
+        open={showCameraDialog}
+        onClose={() => setShowCameraDialog(false)}
+      >
+        <DialogTitle>Enable Camera</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            This interview uses camera monitoring to help verify interview
+            integrity. You may proceed without it, but camera-off status will
+            be noted.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowCameraDialog(false)}>Dismiss</Button>
+          <Button
+            onClick={() => { startCamera(); setShowCameraDialog(false); }}
+            variant="contained"
+            startIcon={<VideocamIcon />}
+          >
+            Enable Camera
           </Button>
         </DialogActions>
       </Dialog>

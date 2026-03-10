@@ -155,6 +155,14 @@ export function useWebSocket({
     }
   }, []);
 
+  const sendCameraFrame = useCallback((base64Data: string, mimeType = 'image/jpeg') => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({ type: 'camera_frame', data: base64Data, mimeType }),
+      );
+    }
+  }, []);
+
   const endInterview = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
@@ -185,6 +193,7 @@ export function useWebSocket({
     sendAudio,
     sendText,
     sendScreenFrame,
+    sendCameraFrame,
     endInterview,
     sendCheatingSignal,
     connected,
