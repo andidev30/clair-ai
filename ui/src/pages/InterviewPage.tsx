@@ -200,6 +200,7 @@ export default function InterviewPage() {
     endInterview,
     sendCandidateReady,
     sendCheatingSignal,
+    sendScreenShared,
     connected,
     error,
   } = useWebSocket({
@@ -297,10 +298,12 @@ export default function InterviewPage() {
   const handleShareScreen = () => {
     setShowScreenShareDialog(false);
     startScreen();
+    sendScreenShared();
   };
 
   const handleDismissScreenShare = () => {
     setShowScreenShareDialog(false);
+    sendScreenShared(); // Skip screen share but still deliver the challenge
   };
 
   if (sessionLoading) {
@@ -463,14 +466,15 @@ export default function InterviewPage() {
       <Box display="flex" flex={1} minHeight={0}>
         {/* Transcript panel */}
         <Box
-          width={showEditor ? 360 : '100%'}
-          maxWidth={showEditor ? 360 : 600}
+          width={showEditor ? 280 : '100%'}
+          maxWidth={showEditor ? 280 : 600}
           mx={showEditor ? 0 : 'auto'}
           display="flex"
           flexDirection="column"
           bgcolor="background.paper"
           borderRight={showEditor ? 1 : 0}
           borderColor="divider"
+          flexShrink={0}
         >
           <Box px={2} py={1.5} borderBottom={1} borderColor="divider">
             <Typography variant="subtitle2">Live Transcript</Typography>
@@ -478,13 +482,32 @@ export default function InterviewPage() {
           <InterviewChat messages={messages} />
         </Box>
 
-        {/* Code editor — only shown when AI triggers it */}
+        {/* Problem panel + Code editor — HackerRank-style 3-panel layout */}
         {showEditor && (
           <>
             <Divider orientation="vertical" flexItem />
-            <Box flex={1} display="flex" flexDirection="column">
+            {/* Problem description panel */}
+            <Box
+              width={360}
+              flexShrink={0}
+              display="flex"
+              flexDirection="column"
+              bgcolor="background.paper"
+              sx={{ overflow: 'auto' }}
+            >
+              <Box px={2} py={1.5} borderBottom={1} borderColor="divider">
+                <Typography variant="subtitle2">Coding Challenge</Typography>
+              </Box>
+              <Box px={2} py={2}>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {challenge?.problem ?? ''}
+                </Typography>
+              </Box>
+            </Box>
+            <Divider orientation="vertical" flexItem />
+            {/* Code editor panel */}
+            <Box flex={1} display="flex" flexDirection="column" minWidth={0}>
               <CodeEditor
-                problem={challenge?.problem ?? ''}
                 language={challenge?.language ?? 'javascript'}
                 starterCode={challenge?.starter_code ?? ''}
                 value={code}
@@ -540,7 +563,7 @@ export default function InterviewPage() {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleDismissScreenShare}>Later</Button>
+          <Button onClick={handleDismissScreenShare}>Skip</Button>
           <Button
             onClick={handleShareScreen}
             variant="contained"

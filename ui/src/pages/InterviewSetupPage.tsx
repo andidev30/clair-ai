@@ -18,6 +18,9 @@ import {
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import LinkIcon from '@mui/icons-material/Link';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { getInterview } from '../api/interviews';
@@ -68,6 +71,16 @@ export default function InterviewSetupPage() {
 
   const getInterviewUrl = (session: Session) => {
     return `${window.location.origin}/interview/${session.token}`;
+  };
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '-';
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(dateString));
   };
 
   const handleCopyLink = (session: Session) => {
@@ -147,13 +160,27 @@ export default function InterviewSetupPage() {
           </Typography>
         )}
 
-        <Stack spacing={2}>
+        <Stack spacing={3}>
           {sessions?.map((session) => (
-            <Paper key={session.id} variant="outlined" sx={{ p: 2 }}>
-              <Box display="flex" justifyContent="space-between" alignItems="center">
-                <Box sx={{ flexGrow: 1, mr: 2 }}>
-                  <Box display="flex" alignItems="center" gap={1} mb={session.status === 'completed' ? 0 : 0.5}>
-                    <Typography variant="body2" fontWeight={600}>
+            <Paper
+              key={session.id}
+              variant="outlined"
+              sx={{
+                p: { xs: 2, sm: 2.5 },
+                borderRadius: 2,
+                transition: 'all 0.2s',
+                '&:hover': {
+                  borderColor: 'primary.main',
+                  bgcolor: 'grey.50',
+                },
+              }}
+            >
+              <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} gap={{ xs: 2, md: 3 }} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between">
+                
+                {/* Left Side: Info */}
+                <Box flexGrow={1} minWidth={0} width="100%">
+                  <Box display="flex" alignItems="center" gap={1.5} mb={1}>
+                    <Typography variant="subtitle1" fontWeight={600} noWrap lineHeight={1}>
                       {session.candidate_name}
                     </Typography>
                     <Chip
@@ -172,44 +199,86 @@ export default function InterviewSetupPage() {
                             ? 'warning'
                             : 'default'
                       }
+                      sx={{ height: 20, fontSize: '0.75rem', fontWeight: 600 }}
                     />
                   </Box>
+
+                  <Box display="flex" flexWrap="wrap" gap={{ xs: 1.5, sm: 3 }} color="text.secondary">
+                    <Box display="flex" alignItems="center" gap={0.5}>
+                      <CalendarTodayIcon sx={{ fontSize: 14, opacity: 0.7 }} />
+                      <Typography variant="caption">
+                        Created At: <Box component="span" fontWeight={500} color="text.primary">{formatDate(session.created_at)}</Box>
+                      </Typography>
+                    </Box>
+                    {session.started_at && (
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <PlayCircleOutlineIcon sx={{ fontSize: 14, opacity: 0.7 }} />
+                        <Typography variant="caption">
+                          Started At: <Box component="span" fontWeight={500} color="text.primary">{formatDate(session.started_at)}</Box>
+                        </Typography>
+                      </Box>
+                    )}
+                    {session.completed_at && (
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <CheckCircleOutlineIcon sx={{ fontSize: 14, opacity: 0.7 }} />
+                        <Typography variant="caption">
+                          Completed At: <Box component="span" fontWeight={500} color="text.primary">{formatDate(session.completed_at)}</Box>
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+
                   {session.status !== 'completed' && (
-                    <TextField
-                      value={getInterviewUrl(session)}
-                      size="small"
-                      fullWidth
-                      slotProps={{ input: { readOnly: true } }}
-                      sx={{ mt: 1 }}
-                    />
+                    <Box mt={1.5} maxWidth={450}>
+                      <TextField
+                        value={getInterviewUrl(session)}
+                        size="small"
+                        fullWidth
+                        slotProps={{ input: { readOnly: true } }}
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            bgcolor: 'background.paper',
+                            borderRadius: 1,
+                            fontSize: '0.8125rem',
+                            height: 32,
+                            '& input': { py: 0.5 }
+                          },
+                        }}
+                      />
+                    </Box>
                   )}
                 </Box>
-                <Stack direction="row" spacing={1} alignItems="center">
+
+                {/* Right Side: Actions */}
+                <Box flexShrink={0} display="flex" alignItems="center" gap={1.5} alignSelf={{ xs: 'flex-start', md: 'center' }}>
                   {session.status !== 'completed' && (
                     <Button
-                      startIcon={<ContentCopyIcon />}
+                      startIcon={<ContentCopyIcon sx={{ fontSize: '16px !important' }}/>}
                       onClick={() => handleCopyLink(session)}
-                      size="small"
                       variant="outlined"
+                      size="small"
+                      color="inherit"
+                      sx={{ borderRadius: 1.5, textTransform: 'none', fontWeight: 600, borderColor: 'divider' }}
                     >
-                      {copiedId === session.id ? 'Copied!' : 'Copy'}
+                      {copiedId === session.id ? 'Copied!' : 'Copy Link'}
                     </Button>
                   )}
                   {session.status === 'completed' && (
                     <Button
                       variant="contained"
-                      size="small"
                       color="primary"
+                      size="small"
                       onClick={() =>
                         navigate(
                           `/interviews/${id}/sessions/${session.id}/results`,
                         )
                       }
+                      sx={{ borderRadius: 1.5, px: 2, textTransform: 'none', fontWeight: 600, boxShadow: 'none' }}
                     >
                       View Results
                     </Button>
                   )}
-                </Stack>
+                </Box>
               </Box>
             </Paper>
           ))}

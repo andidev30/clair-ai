@@ -295,6 +295,33 @@ async def interview_ws(websocket: WebSocket, session_token: str):
                             })
                             logger.info(f"Cheating signal: {msg.get('signal_type')} - {msg.get('detail', '')[:60]}")
 
+                        elif msg_type == "screen_shared":
+                            # Phase 2: Candidate shared screen — deliver pending challenge
+                            state = get_session_state_by_token(session_token)
+                            pending = state.pop("pending_challenge", None)
+                            if pending:
+                                await websocket.send_text(json.dumps({
+                                    "type": "stage_change",
+                                    "stage": "coding",
+                                    "action": "show_editor",
+                                }))
+                                await websocket.send_text(json.dumps({
+                                    "type": "coding_challenge",
+                                    "problem": pending["problem"],
+                                    "language": pending["language"],
+                                    "starter_code": pending.get("starter_code", ""),
+                                }))
+                                live_request_queue.send_content(types.Content(
+                                    parts=[types.Part(text=(
+                                        "The candidate just shared their screen and the coding problem "
+                                        "is now displayed in their editor. Walk them through the problem "
+                                        "conversationally — describe what it's asking in your own words, "
+                                        "clarify expected inputs and outputs, mention any important constraints, "
+                                        "and ask if they have any questions before they start coding."
+                                    ))]
+                                ))
+                            continue
+
                         elif msg_type == "end_interview":
                             # Candidate manually ended — handle server-side, no LLM roundtrip
                             logger.info("Candidate clicked End — closing session directly")

@@ -61,24 +61,23 @@ def send_coding_challenge(problem: str, language: str = "javascript", starter_co
     state = get_session_state()
     state["current_stage"] = "coding"
 
-    # Automatically handle UI transitions
+    # Store challenge for delivery after candidate shares their screen
+    state["pending_challenge"] = {
+        "problem": problem,
+        "language": language,
+        "starter_code": starter_code,
+    }
+
+    # Phase 1: Only request screen share — editor + problem delivered after confirmation
     _send_to_client({
         "type": "stage_change",
         "stage": "coding",
         "action": "request_screen_share",
     })
-    _send_to_client({
-        "type": "stage_change",
-        "stage": "coding",
-        "action": "show_editor",
-    })
-    _send_to_client({
-        "type": "coding_challenge",
-        "problem": problem,
-        "language": language,
-        "starter_code": starter_code,
-    })
-    return {"status": "sent", "problem": problem, "language": language}
+    return {
+        "status": "screen_share_requested",
+        "message": "Screen share requested. The coding challenge will appear once the candidate shares their screen. Ask the candidate to share their screen now.",
+    }
 
 
 def observe_screen() -> dict:

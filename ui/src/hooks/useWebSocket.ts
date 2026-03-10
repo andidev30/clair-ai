@@ -181,6 +181,12 @@ export function useWebSocket({
     }
   }, []);
 
+  const sendScreenShared = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'screen_shared' }));
+    }
+  }, []);
+
   const disconnect = useCallback(() => {
     wsRef.current?.close();
     wsRef.current = null;
@@ -203,6 +209,7 @@ export function useWebSocket({
     endInterview,
     sendCandidateReady,
     sendCheatingSignal,
+    sendScreenShared,
     connected,
     error,
   };
