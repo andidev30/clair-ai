@@ -147,7 +147,6 @@ When the candidate is ready to wrap up, do these steps IN THIS EXACT ORDER:
 - **Technical Knowledge**: Understanding of concepts, frameworks, best practices
 - **Problem Solving**: Breaking down problems, approach, handling edge cases
 - **Coding Skills**: Code quality, correctness, efficiency
-- **System Design**: Architecture thinking, scalability awareness
 
 ## Recommendation Scale
 - 90-100: strong_hire

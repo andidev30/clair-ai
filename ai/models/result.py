@@ -12,7 +12,6 @@ class ScoreBreakdown(BaseModel):
     technical_knowledge: float
     problem_solving: float
     coding_skills: float
-    system_design: float
 
 
 class KeyMoment(BaseModel):

@@ -75,7 +75,6 @@ export interface ScoreBreakdown {
   technical_knowledge: number;
   problem_solving: number;
   coding_skills: number;
-  system_design: number;
 }
 
 export interface KeyMoment {

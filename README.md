@@ -40,13 +40,13 @@ Built for the [Gemini Live Agent Challenge](https://geminiliveagentchallenge.dev
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 19, TypeScript, Vite, Material UI 7, Monaco Editor |
-| API Backend | Go 1.25, Fiber v2, JWT auth, Google OAuth |
-| AI Service | Python 3.12, FastAPI, Google ADK, Gemini Live API |
-| Database | Firestore Enterprise (MongoDB compatibility mode) |
-| Infrastructure | Google Cloud Run, Cloud Build, Container Registry |
+| Layer          | Technology                                               |
+| -------------- | -------------------------------------------------------- |
+| Frontend       | React 19, TypeScript, Vite, Material UI 7, Monaco Editor |
+| API Backend    | Go 1.25, Fiber v2, JWT auth, Google OAuth                |
+| AI Service     | Python 3.12, FastAPI, Google ADK, Gemini Live API        |
+| Database       | Firestore Enterprise (MongoDB compatibility mode)        |
+| Infrastructure | Google Cloud Run, Cloud Build, Container Registry        |
 
 ### Google Cloud Services Used
 
@@ -80,7 +80,7 @@ Built for the [Gemini Live Agent Challenge](https://geminiliveagentchallenge.dev
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/clair-ai.git
+git clone https://github.com/andidev30/clair-ai.git
 cd clair-ai
 ```
 
@@ -104,6 +104,7 @@ docker compose up --build
 ```
 
 This starts:
+
 - **MongoDB** on `localhost:27017`
 - **API** (Go) on `localhost:3000`
 - **AI Service** (Python) on `localhost:8001`
@@ -145,8 +146,8 @@ python main.py
 
 ```bash
 cd ui
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 </details>
@@ -157,23 +158,23 @@ npm run dev
 
 ### AI Service (`ai/.env`)
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GOOGLE_API_KEY` | Gemini API key from AI Studio | (required) |
-| `GOOGLE_GENAI_USE_VERTEXAI` | Use Vertex AI instead of AI Studio | `FALSE` |
-| `GOLANG_BACKEND_URL` | URL of the Go API service | `http://localhost:3000` |
-| `INTERNAL_API_KEY` | Shared key for service-to-service auth | `clair-ai-dev-key` |
-| `AGENT_MODEL` | Gemini model to use | `gemini-2.5-flash-preview-native-audio-dialog` |
+| Variable                    | Description                            | Default                                        |
+| --------------------------- | -------------------------------------- | ---------------------------------------------- |
+| `GOOGLE_API_KEY`            | Gemini API key from AI Studio          | (required)                                     |
+| `GOOGLE_GENAI_USE_VERTEXAI` | Use Vertex AI instead of AI Studio     | `FALSE`                                        |
+| `GOLANG_BACKEND_URL`        | URL of the Go API service              | `http://localhost:3000`                        |
+| `INTERNAL_API_KEY`          | Shared key for service-to-service auth | `clair-ai-dev-key`                             |
+| `AGENT_MODEL`               | Gemini model to use                    | `gemini-2.5-flash-preview-native-audio-dialog` |
 
 ### API Service (`api/.env`)
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID | (required) |
-| `JWT_SECRET` | Secret for signing JWT tokens | `clair-ai-dev-secret` |
-| `MONGO_URI` | MongoDB connection string | `mongodb://localhost:27017/clair_ai` |
-| `INTERNAL_API_KEY` | Shared key for service-to-service auth | `clair-ai-dev-key` |
-| `ALLOWED_ORIGINS` | CORS allowed origins | `*` |
+| Variable           | Description                            | Default                              |
+| ------------------ | -------------------------------------- | ------------------------------------ |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID                 | (required)                           |
+| `JWT_SECRET`       | Secret for signing JWT tokens          | `clair-ai-dev-secret`                |
+| `MONGO_URI`        | MongoDB connection string              | `mongodb://localhost:27017/clair_ai` |
+| `INTERNAL_API_KEY` | Shared key for service-to-service auth | `clair-ai-dev-key`                   |
+| `ALLOWED_ORIGINS`  | CORS allowed origins                   | `*`                                  |
 
 ---
 
@@ -191,12 +192,39 @@ npm run dev
 gcloud config set project YOUR_PROJECT_ID
 
 # Create .env.production with production values at the project root
+cp .env.production.example .env.production
+# Edit .env.production with your values
 
 # Deploy all services (or choose: ai, api, ui)
 ./deploy.sh
 ```
 
+### `.env.production` template
+
+```bash
+# ── AI Service ────────────────────────────────────────────────
+GOOGLE_API_KEY=your-gemini-api-key
+GOOGLE_GENAI_USE_VERTEXAI=FALSE
+AGENT_MODEL=gemini-2.5-flash-preview-native-audio-dialog
+
+# ── API Service ───────────────────────────────────────────────
+GOOGLE_CLIENT_ID=your-google-oauth-client-id
+JWT_SECRET=your-jwt-secret
+MONGO_URI=mongodb+srv://user:pass@cluster.mongodb.net/clair_ai
+
+# ── UI (React) ────────────────────────────────────────────────
+VITE_GOOGLE_CLIENT_ID=your-google-oauth-client-id
+
+# ── Shared ────────────────────────────────────────────────────
+INTERNAL_API_KEY=your-internal-api-key
+
+# ── Service URLs (set after first deploy) ────────────────────
+GOLANG_BACKEND_URL=https://api-xxxx-uc.a.run.app
+ALLOWED_ORIGINS=https://ui-xxxx-uc.a.run.app
+```
+
 Each service is built via Cloud Build and deployed to Cloud Run in `us-central1`. The `cloudbuild.yaml` in each service directory handles:
+
 1. Building the Docker image
 2. Pushing to Google Container Registry
 3. Deploying to Cloud Run with environment variables from `.env.production`
@@ -257,12 +285,12 @@ Clair follows a natural 4-stage interview:
 
 ### Agent Tools
 
-| Tool | Purpose |
-|------|---------|
-| `send_coding_challenge` | Pushes a problem to the candidate's code editor and triggers screen sharing |
-| `observe_screen` | Returns the latest observation of the candidate's screen (code, AI tools, etc.) |
-| `get_cheating_signals` | Retrieves detected integrity events (tab switches, large pastes, AI tools) |
-| `end_interview` | Submits final scores across 5 dimensions with a hiring recommendation |
+| Tool                    | Purpose                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| `send_coding_challenge` | Pushes a problem to the candidate's code editor and triggers screen sharing     |
+| `observe_screen`        | Returns the latest observation of the candidate's screen (code, AI tools, etc.) |
+| `get_cheating_signals`  | Retrieves detected integrity events (tab switches, large pastes, AI tools)      |
+| `end_interview`         | Submits final scores across 5 dimensions with a hiring recommendation           |
 
 ### Scoring
 
@@ -272,7 +300,6 @@ Each interview is scored on a 0-100 scale across 5 dimensions:
 - **Technical Knowledge** -- Understanding of concepts, frameworks, best practices
 - **Problem Solving** -- Breaking down problems, approach, edge case handling
 - **Coding Skills** -- Code quality, correctness, efficiency
-- **System Design** -- Architecture thinking, scalability awareness
 
 Recommendations: `strong_hire` (90-100), `hire` (70-89), `no_hire` (50-69), `strong_no_hire` (0-49)
 

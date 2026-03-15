@@ -47,6 +47,7 @@ export default function InterviewSetupPage() {
     queryKey: ['sessions', id],
     queryFn: () => getSessions(id!),
     enabled: !!id,
+    refetchInterval: 5000,
   });
 
   const createSessionMutation = useMutation({

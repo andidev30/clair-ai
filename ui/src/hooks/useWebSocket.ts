@@ -26,6 +26,7 @@ interface UseWebSocketOptions {
   onStageChange?: (stage: string, action: string) => void;
   onInterviewComplete?: () => void;
   onSessionReady?: (data: { session_id: string; interview: unknown }) => void;
+  onCheatingSignal?: (signal: CheatingSignal) => void;
 }
 
 export function useWebSocket({
@@ -36,6 +37,7 @@ export function useWebSocket({
   onStageChange,
   onInterviewComplete,
   onSessionReady,
+  onCheatingSignal,
 }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
@@ -48,6 +50,7 @@ export function useWebSocket({
   const onStageChangeRef = useRef(onStageChange);
   const onInterviewCompleteRef = useRef(onInterviewComplete);
   const onSessionReadyRef = useRef(onSessionReady);
+  const onCheatingSignalRef = useRef(onCheatingSignal);
 
   useEffect(() => { onAudioRef.current = onAudio; }, [onAudio]);
   useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
@@ -55,6 +58,7 @@ export function useWebSocket({
   useEffect(() => { onStageChangeRef.current = onStageChange; }, [onStageChange]);
   useEffect(() => { onInterviewCompleteRef.current = onInterviewComplete; }, [onInterviewComplete]);
   useEffect(() => { onSessionReadyRef.current = onSessionReady; }, [onSessionReady]);
+  useEffect(() => { onCheatingSignalRef.current = onCheatingSignal; }, [onCheatingSignal]);
 
   const connect = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -115,6 +119,13 @@ export function useWebSocket({
             break;
           case 'interview_complete':
             onInterviewCompleteRef.current?.();
+            break;
+          case 'cheating_signal':
+            onCheatingSignalRef.current?.({
+              signal_type: msg.signal_type,
+              detail: msg.detail,
+              timestamp: msg.timestamp,
+            });
             break;
           case 'error':
             setError(msg.message);

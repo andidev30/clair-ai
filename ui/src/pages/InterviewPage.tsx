@@ -215,6 +215,11 @@ export default function InterviewPage() {
       stopScreenRef.current();
       stopCameraRef.current();
     },
+    onCheatingSignal: (signal) => {
+      // Server-detected integrity signal — logged silently, stored server-side,
+      // surfaces in the recruiter's results page key moments.
+      console.warn('[Integrity]', signal.signal_type, signal.detail);
+    },
   });
 
   const { start: startMic, stop: stopMic, isRecording, getVolume } = useAudioStream({

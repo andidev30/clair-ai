@@ -3,9 +3,11 @@ import base64
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from google import genai as _genai
 from google.adk.agents.live_request_queue import LiveRequestQueue
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.runners import Runner
@@ -102,6 +104,65 @@ app = FastAPI(title="Clair AI - Interview Service")
 
 APP_NAME = "clair-ai"
 session_service = InMemorySessionService()
+
+# Gemini Flash client for lightweight AI-tool detection on screen frames.
+# A separate client from the ADK runner so it doesn't share quota/state.
+_detection_client = _genai.Client(api_key=config.GOOGLE_API_KEY)
+_detection_executor = ThreadPoolExecutor(max_workers=2)
+
+_AI_TOOL_CHECK_PROMPT = (
+    "Look at this screenshot. Is an AI assistant tool clearly visible? "
+    "Examples: ChatGPT (chat.openai.com), Claude (claude.ai), Google Gemini, "
+    "GitHub Copilot chat pane, Perplexity, Cursor AI chat, Codeium, or any "
+    "AI chat interface actively showing code or answers. "
+    "Reply YES:<tool_name> (e.g. YES:ChatGPT) if one is clearly visible, "
+    "or NO if not. One token reply only."
+)
+
+
+def _sync_detect_ai_tool(image_data: bytes, mime_type: str) -> tuple[bool, str]:
+    """Synchronous Gemini Flash call — run in executor to avoid blocking event loop."""
+    try:
+        response = _detection_client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=[
+                types.Part.from_bytes(data=image_data, mime_type=mime_type),
+                _AI_TOOL_CHECK_PROMPT,
+            ],
+        )
+        text = (response.text or "").strip()
+        if text.upper().startswith("YES"):
+            tool_name = text[4:].strip() if ":" in text else "AI assistant tool"
+            return True, tool_name
+        return False, ""
+    except Exception as e:
+        logger.debug(f"AI tool detection skipped: {e}")
+        return False, ""
+
+
+async def _ai_tool_check_task(
+    session_token: str, image_data: bytes, mime_type: str, websocket: WebSocket
+):
+    """Background task: detect AI tools in a screen frame and record the signal."""
+    loop = asyncio.get_event_loop()
+    detected, tool_name = await loop.run_in_executor(
+        _detection_executor, _sync_detect_ai_tool, image_data, mime_type
+    )
+    if not detected:
+        return
+
+    state = get_session_state_by_token(session_token)
+    signal = {
+        "signal_type": "ai_tool_detected",
+        "detail": f"AI tool visible on screen: {tool_name}",
+        "timestamp": int(loop.time() * 1000),
+    }
+    state.setdefault("cheating_signals", []).append(signal)
+    logger.info(f"[INTEGRITY] AI tool detected: {tool_name} (session={session_token})")
+    try:
+        await websocket.send_text(json.dumps({"type": "cheating_signal", **signal}))
+    except Exception:
+        pass
 
 # Cache of runners per interview config (keyed by session token)
 _runners: dict[str, Runner] = {}
@@ -256,9 +317,10 @@ async def interview_ws(websocket: WebSocket, session_token: str):
                             # Screen capture frame — also gated to prevent 1008
                             if not audio_gate.is_set():
                                 continue
+                            mime_type = msg.get("mimeType", "image/jpeg")
                             image_data = base64.b64decode(msg["data"])
                             image_blob = types.Blob(
-                                mime_type=msg.get("mimeType", "image/jpeg"),
+                                mime_type=mime_type,
                                 data=image_data,
                             )
                             live_request_queue.send_realtime(image_blob)
@@ -267,6 +329,13 @@ async def interview_ws(websocket: WebSocket, session_token: str):
                             state["latest_screen_observation"] = (
                                 "Screen frame received - candidate's code editor is visible"
                             )
+                            # Periodic AI-tool detection — every 10 seconds
+                            now = asyncio.get_event_loop().time()
+                            if now - state.get("_last_ai_tool_check", 0) >= 10.0:
+                                state["_last_ai_tool_check"] = now
+                                asyncio.create_task(
+                                    _ai_tool_check_task(session_token, image_data, mime_type, websocket)
+                                )
 
                         elif msg_type == "camera_frame":
                             # Camera capture frame — also gated to prevent 1008
@@ -353,7 +422,6 @@ async def interview_ws(websocket: WebSocket, session_token: str):
                                     "technical_knowledge": 0,
                                     "problem_solving": 0,
                                     "coding_skills": 0,
-                                    "system_design": 0,
                                 },
                                 "key_moments": key_moments,
                             }
@@ -448,17 +516,18 @@ async def interview_ws(websocket: WebSocket, session_token: str):
                             logger.info("Function response, resuming realtime input")
                             _open_gate()
 
-                        # When model produces audio output, track speaking state.
-                        # Open gate when model STOPS speaking (it's ready for input).
+                        # Track speaking state for interview-end logic only.
+                        # Gate is NOT closed during model speech — live interruption is allowed.
                         if has_audio:
                             if not model_speaking:
                                 model_speaking = True
-                                logger.info("Model started speaking, gate stays closed during speech")
+                                # Open gate on first audio to prove connection is ready.
+                                if not audio_gate.is_set():
+                                    logger.info("First model audio, opening gate for live input")
+                                    _open_gate()
                         else:
                             if model_speaking and not has_function_call:
                                 model_speaking = False
-                                logger.info("Model stopped speaking, opening gate for input")
-                                _open_gate()
 
                     # Extract audio and send explicitly
                     if event.content and event.content.parts:
@@ -540,7 +609,6 @@ async def interview_ws(websocket: WebSocket, session_token: str):
                                 "technical_knowledge": 0,
                                 "problem_solving": 0,
                                 "coding_skills": 0,
-                                "system_design": 0,
                             }),
                             "key_moments": key_moments,
                         }

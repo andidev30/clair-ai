@@ -1,3 +1,4 @@
+import contextvars
 import json
 import logging
 
@@ -22,18 +23,22 @@ def remove_session_state(token: str):
     _session_states.pop(token, None)
 
 
-# Active token for the current tool execution context
-_active_token: str = ""
+# Active token scoped to each async task — eliminates race conditions under
+# concurrent sessions. asyncio.gather() copies the current context into each
+# task, so set_active_token() called before gather() is visible to all child
+# tasks for that session and only that session.
+_active_token_var: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "active_token", default=""
+)
 
 
 def set_active_token(token: str):
-    global _active_token
-    _active_token = token
+    _active_token_var.set(token)
 
 
 def get_session_state() -> dict:
     """Get state for the currently active session."""
-    return _session_states.get(_active_token, {})
+    return _session_states.get(_active_token_var.get(), {})
 
 
 def _send_to_client(msg_dict: dict):
@@ -118,7 +123,6 @@ def end_interview(
     technical_knowledge: float,
     problem_solving: float,
     coding_skills: float,
-    system_design: float,
 ) -> dict:
     """Signal that the interview is complete and submit the final evaluation scores.
 
@@ -132,7 +136,6 @@ def end_interview(
         technical_knowledge: Technical knowledge score from 0 to 100.
         problem_solving: Problem solving score from 0 to 100.
         coding_skills: Coding skills score from 0 to 100.
-        system_design: System design score from 0 to 100.
 
     Returns:
         Confirmation that the interview ending process has started.
@@ -149,7 +152,6 @@ def end_interview(
             "technical_knowledge": technical_knowledge,
             "problem_solving": problem_solving,
             "coding_skills": coding_skills,
-            "system_design": system_design,
         },
     }
 

@@ -31,7 +31,6 @@ const scoreLabels: Record<string, string> = {
   technical_knowledge: 'Technical Knowledge',
   problem_solving: 'Problem Solving',
   coding_skills: 'Coding Skills',
-  system_design: 'System Design',
 };
 
 export default function ResultsPage() {

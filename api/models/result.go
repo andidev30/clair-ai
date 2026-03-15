@@ -25,7 +25,6 @@ type ScoreBreakdown struct {
 	TechnicalKnowledge float64 `json:"technical_knowledge" bson:"technical_knowledge"`
 	ProblemSolving     float64 `json:"problem_solving" bson:"problem_solving"`
 	CodingSkills       float64 `json:"coding_skills" bson:"coding_skills"`
-	SystemDesign       float64 `json:"system_design" bson:"system_design"`
 }
 
 type KeyMoment struct {
