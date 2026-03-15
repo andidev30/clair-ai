@@ -309,6 +309,8 @@ Recommendations: `strong_hire` (90-100), `hire` (70-89), `no_hire` (50-69), `str
 
 Built by [andidev30](https://g.dev/andidev30) for the [Gemini Live Agent Challenge](https://geminiliveagentchallenge.devpost.com) hackathon.
 
+[Read the write-up on Medium](https://medium.com/@andidev30/how-i-built-an-ai-technical-interviewer-with-gemini-live-api-0be6bb3a0b0a)
+
 ---
 
 ## License
