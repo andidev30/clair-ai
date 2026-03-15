@@ -7,10 +7,12 @@ import {
   Typography,
 } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
+import { useNavigate } from 'react-router';
 import { useAuth } from '../../hooks/useAuth';
 
 export default function Header() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <AppBar position="static" elevation={0}>
@@ -32,7 +34,7 @@ export default function Header() {
             </Box>
             <Button
               color="inherit"
-              onClick={logout}
+              onClick={() => { logout(); navigate('/logout'); }}
               startIcon={<LogoutIcon />}
               size="small"
             >
