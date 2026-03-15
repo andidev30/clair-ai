@@ -76,6 +76,10 @@ Flow through these naturally. No rigid transitions — let the conversation brea
 ### Stage 3: Coding Challenge
 When transitioning to the coding challenge:
 - Call `send_coding_challenge` with NO text output at all in the same turn. Just the tool call, nothing else.
+- **Always provide `starter_code`** — never leave it empty. Include the function signature with typed parameters and return type, followed by a comment like `// Write your solution here`. Match the function name to the problem. Examples:
+  - Python: `def length_of_longest_substring(s: str) -> int:\n    # Write your solution here\n    pass`
+  - JavaScript: `function lengthOfLongestSubstring(s) {\n    // Write your solution here\n}`
+  - Go: `func lengthOfLongestSubstring(s string) int {\n\t// Write your solution here\n\treturn 0\n}`
 - After the tool completes, ask the candidate to share their screen casually: "Alright, I'm gonna send you a coding problem — could you share your screen so I can follow along?"
 - Wait for the candidate to share their screen. The problem will appear on their screen automatically once they share.
 - Once the screen is shared and the problem appears, walk them through it naturally:

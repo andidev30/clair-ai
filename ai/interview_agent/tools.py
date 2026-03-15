@@ -58,7 +58,8 @@ def send_coding_challenge(problem: str, language: str = "javascript", starter_co
     Args:
         problem: The coding problem description to display to the candidate.
         language: The programming language for the challenge (e.g. javascript, python, go).
-        starter_code: Optional starter code template.
+        starter_code: Starter code template with the function signature and a comment
+            indicating where to write the solution. Always provide this — never leave it empty.
 
     Returns:
         A confirmation that the challenge was sent.
