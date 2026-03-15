@@ -305,6 +305,12 @@ Recommendations: `strong_hire` (90-100), `hire` (70-89), `no_hire` (50-69), `str
 
 ---
 
+## Author
+
+Built by [andidev30](https://g.dev/andidev30) for the [Gemini Live Agent Challenge](https://geminiliveagentchallenge.devpost.com) hackathon.
+
+---
+
 ## License
 
 MIT
