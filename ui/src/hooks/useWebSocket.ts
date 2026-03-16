@@ -61,8 +61,9 @@ export function useWebSocket({
   useEffect(() => { onCheatingSignalRef.current = onCheatingSignal; }, [onCheatingSignal]);
 
   const connect = useCallback(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/interview/${sessionToken}`;
+    const aiUrl = import.meta.env.VITE_AI_URL || '';
+    const wsBase = aiUrl.replace(/^http/, 'ws');
+    const wsUrl = `${wsBase}/ws/interview/${sessionToken}`;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
