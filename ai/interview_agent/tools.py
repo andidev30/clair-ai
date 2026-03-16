@@ -82,7 +82,7 @@ def send_coding_challenge(problem: str, language: str = "javascript", starter_co
     })
     return {
         "status": "screen_share_requested",
-        "message": "Screen share requested. The coding challenge will appear once the candidate shares their screen. Ask the candidate to share their screen now.",
+        "message": "Screen share requested. Ask the candidate to share their screen, then STOP speaking. Do NOT describe or mention anything about the problem yet. Wait silently — you will receive a system notification when the screen is shared and the problem is visible.",
     }
 
 
