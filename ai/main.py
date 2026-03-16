@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 import httpx
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from google import genai as _genai
-from google.adk.agents.live_request_queue import LiveRequestQueue
+from google.adk.agents.live_request_queue import LiveRequest, LiveRequestQueue
 from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
@@ -24,6 +24,38 @@ from services.webhook import post_result
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+class GatedLiveRequestQueue(LiveRequestQueue):
+    """LiveRequestQueue that can pause blob (audio/image) delivery to the ADK.
+
+    The standard LiveRequestQueue passes items directly to the ADK's
+    _send_to_model task via asyncio.Queue's internal waiter mechanism — items
+    bypass _queue entirely when a getter is waiting, so draining _queue after
+    a function_call event is detected does nothing.
+
+    By overriding get() we intercept BEFORE the blob reaches send_realtime(),
+    giving us a reliable gate even when the item is already out of the queue.
+    Non-blob messages (content, activity signals, close) always pass through
+    immediately so function responses and control signals are never blocked.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._blob_gate = asyncio.Event()
+        self._blob_gate.set()  # open by default
+
+    async def get(self) -> LiveRequest:
+        req = await self._queue.get()
+        if req.blob:
+            await self._blob_gate.wait()  # hold until gate is open
+        return req
+
+    def open_blob_gate(self):
+        self._blob_gate.set()
+
+    def close_blob_gate(self):
+        self._blob_gate.clear()
 
 # Markers that indicate leaked internal reasoning / chain-of-thought
 _REASONING_MARKERS = [
@@ -242,7 +274,7 @@ async def interview_ws(websocket: WebSocket, session_token: str):
             app_name=APP_NAME, user_id=user_id, session_id=adk_session_id
         )
 
-    live_request_queue = LiveRequestQueue()
+    live_request_queue = GatedLiveRequestQueue()
 
     # Gate to pause ALL realtime input (audio + screen frames) during
     # sensitive operations. Native audio models reject sendRealtimeInput
@@ -257,7 +289,10 @@ async def interview_ws(websocket: WebSocket, session_token: str):
         response_modalities=[types.Modality.AUDIO],
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
-        session_resumption=types.SessionResumptionConfig(),
+        # session_resumption intentionally omitted — it conflicts with the
+        # manual retry loop below.  When a 1007 kills the connection, the SDK
+        # would try to resume a dead session and trigger a second 1007.
+        # Our retry loop handles reconnection + context injection explicitly.
         context_window_compression=types.ContextWindowCompressionConfig(
             trigger_tokens=100000,
             sliding_window=types.SlidingWindow(target_tokens=80000),
@@ -457,6 +492,7 @@ async def interview_ws(websocket: WebSocket, session_token: str):
             await asyncio.sleep(seconds)
             if not audio_gate.is_set():
                 audio_gate.set()
+                live_request_queue.open_blob_gate()
                 logger.info("Audio gate re-opened by safety timeout")
 
         def _open_gate():
@@ -464,16 +500,20 @@ async def interview_ws(websocket: WebSocket, session_token: str):
             if gate_timeout_task and not gate_timeout_task.done():
                 gate_timeout_task.cancel()
             audio_gate.set()
+            live_request_queue.open_blob_gate()
             logger.debug(f"Gate OPENED (was_speaking={model_speaking})")
 
         def _close_gate(timeout: float = 5.0):
             nonlocal gate_timeout_task
             audio_gate.clear()
+            # Also close the blob gate on the queue itself.  The audio_gate
+            # prevents NEW blobs from being enqueued, but the blob gate in
+            # GatedLiveRequestQueue intercepts blobs that were already
+            # retrieved by the ADK's _send_to_model task (bypassing _queue).
+            live_request_queue.close_blob_gate()
             logger.debug(f"Gate CLOSED (timeout={timeout}s)")
 
-            # Drain the queue to drop any pending in-flight audio frames.
-            # If we don't drop them, the runner will send them while the API
-            # is trying to handle a tool call, which causes a 1008 policy violation.
+            # Drain any blobs still sitting in _queue (not yet retrieved).
             while not live_request_queue._queue.empty():
                 try:
                     live_request_queue._queue.get_nowait()
@@ -484,7 +524,7 @@ async def interview_ws(websocket: WebSocket, session_token: str):
                 gate_timeout_task.cancel()
             gate_timeout_task = asyncio.create_task(_gate_with_timeout(timeout))
 
-        max_retries = 3
+        max_retries = 6
         for attempt in range(max_retries + 1):
             try:
                 async for event in runner.run_live(
@@ -516,8 +556,14 @@ async def interview_ws(websocket: WebSocket, session_token: str):
                             logger.info("Function response, resuming realtime input")
                             _open_gate()
 
-                        # Track speaking state for interview-end logic only.
-                        # Gate is NOT closed during model speech — live interruption is allowed.
+                        # Track speaking state.
+                        # Gate stays OPEN during model speech so the candidate
+                        # can interrupt.  When the model stops speaking and a
+                        # function call is NOT in the same event, pre-emptively
+                        # close the gate: function calls follow immediately after
+                        # the last audio event, and we need the gate closed before
+                        # the function_call event arrives (otherwise audio already
+                        # retrieved by _send_to_model leaks through to Google).
                         if has_audio:
                             if not model_speaking:
                                 model_speaking = True
@@ -528,6 +574,9 @@ async def interview_ws(websocket: WebSocket, session_token: str):
                         else:
                             if model_speaking and not has_function_call:
                                 model_speaking = False
+                                # Pre-emptive close: a tool call may follow immediately.
+                                # Short timeout so gate reopens quickly if no tool call arrives.
+                                _close_gate(1.5)
 
                     # Extract audio and send explicitly
                     if event.content and event.content.parts:
@@ -699,6 +748,7 @@ async def interview_ws(websocket: WebSocket, session_token: str):
                     f"(session={session_token})"
                 )
                 audio_gate.set()
+                live_request_queue.open_blob_gate()
 
             # End-interview timeout — the downstream event loop may be stuck
             # waiting for events that never come after the model finishes.

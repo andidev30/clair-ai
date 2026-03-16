@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const SAMPLE_RATE = 16000;
 
@@ -67,6 +67,19 @@ export function useAudioStream({ onAudioData }: UseAudioStreamOptions) {
     workletRef.current = null;
     analyserRef.current = null;
     setIsRecording(false);
+  }, []);
+
+  // When the tab is hidden, browsers suspend the AudioContext.  On returning
+  // to the tab the context stays suspended unless explicitly resumed — audio
+  // stops flowing to the backend and the model appears to "hang".
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && contextRef.current?.state === 'suspended') {
+        contextRef.current.resume();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
   const getVolume = useCallback(() => {
