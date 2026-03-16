@@ -155,11 +155,9 @@ export default function InterviewPage() {
         const existTrimmed = existing.text.trim();
         const newTrimmed = msg.text.trim();
         if (
-          isLastMessage && (
-            existTrimmed === newTrimmed ||
-            (existTrimmed.length > 15 && newTrimmed.startsWith(existTrimmed.substring(0, 30))) ||
-            (newTrimmed.length > 15 && existTrimmed.startsWith(newTrimmed.substring(0, 30)))
-          )
+          existTrimmed === newTrimmed ||
+          (existTrimmed.length > 15 && newTrimmed.startsWith(existTrimmed.substring(0, 30))) ||
+          (newTrimmed.length > 15 && existTrimmed.startsWith(newTrimmed.substring(0, 30)))
         ) {
           console.log('[Transcript] SKIP duplicate', msg.speaker);
           return prev;
